@@ -6,6 +6,20 @@ This file is the single source of truth for "what now?". Update it after any com
 
 ---
 
+## Session pickup checklist
+
+When picking up the project in a fresh chat, run through this before doing any new work:
+
+1. **Read this file (`docs/PLAN.md`) and `CLAUDE.md`.** CLAUDE.md is auto-loaded; this file you should re-read in full each session because it changes between sessions.
+2. **Confirm git state matches "Current state" below:** `git log --oneline -10` should show the same recent commits in the same order. If it doesn't, reconcile before proceeding (someone else committed, or this file is stale).
+3. **Confirm the local DB is healthy:** `docker compose ps` should show the postgres service `Up (healthy)`. If not running, `docker compose up -d --wait`. If a port conflict appears, the user has another Postgres on `:5432` (likely the postgresql@15 client tools they have via Homebrew — but the server may be running too).
+4. **Confirm Node + pnpm:** `node --version` should report `v24.x` (fnm auto-switches via `.nvmrc`); `pnpm --version` should report `10.33.2`. If `node` is "command not found", the parent shell didn't source the fnm init from `~/.zshrc` — run `eval "$(fnm env --use-on-cd)"` in that shell.
+5. **Read the "Next move" section below.** That's the immediate task. If it doesn't make sense given the rest of the file, ask the user before proceeding — PLAN.md may have drifted from reality.
+
+If steps 2-4 surface anything unexpected, surface it to the user before changing code. The kickoff brief that started this project is **one-shot** (not committed in the repo) — do not expect to find it in conversation history. PLAN.md, CLAUDE.md, and the ADRs in `docs/adr/` are the only authoritative project artifacts.
+
+---
+
 ## Scope (one paragraph)
 
 Lima Disruption Events v0 is the first deployable slice of Disruption Intelligence (B2B mobility intelligence, Lima-anchored, solo founder). It ingests upcoming disruption events for Lima from two public sources, indexes them by time and geography in PostgreSQL+PostGIS, exposes a small REST API, and renders them on a React map + filterable list with a per-event detail drawer. The v0 has two simultaneous purposes: a senior-level portfolio piece (especially around Postgres internals — BRIN, GiST, VACUUM) and the first reusable technical slice of the real business. Out of scope: auth, multi-tenant, predictive impact modeling, multiple cities, ML/LLM. Stack is locked: TypeScript, Fastify, Drizzle, Postgres 16 + PostGIS, `node-cron` in-process (no Redis/BullMQ for v0), Vite + React + MapLibre, Vitest + Testcontainers, Fly.io for API + DB, Vercel for web.
@@ -22,6 +36,9 @@ Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
 - [x] Node 24 LTS + pnpm 10.33.2 pinned (`.nvmrc`, `engines`, `packageManager` w/ SHA-512)
 - [x] `docker-compose.yml` — Postgres 16 + PostGIS 3.5 (no Redis)
 - [x] **ADR-003** — idempotent upsert via `(source_id, external_id)`
+- [ ] **ADR-001** — BRIN index on `event_start_at` *(pulled forward from Week 2; see "ADR-first ordering" below)*
+- [ ] **ADR-002** — GiST index on `events.location` geography column *(pulled forward from Week 3)*
+- [ ] **ADR-004** — co-locating API + DB on Fly's private network *(pulled forward from Week 3)*
 - [ ] Drizzle schema for `cities` + `events` tables; first migration applied locally
 - [ ] One scraper (HTML source, TBD) writing through the idempotent upsert pipeline
 - [ ] Idempotent upsert pipeline with retry + structured logs (pino)
@@ -36,7 +53,6 @@ Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
 - [ ] Second scraper plugged into the same pipeline (proves the abstraction)
 - [ ] Vite + React + Tailwind app scaffold
 - [ ] MapLibre map with event markers, basic event list view, both wired to TanStack Query
-- [ ] **ADR-001** — BRIN index on `event_start_at`
 - [ ] **Checkpoint:** Frontend at localhost shows real events from the API on a map and a list
 
 ### Week 3 — Polish, deploy, document (~22h)
@@ -48,8 +64,6 @@ Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
 - [ ] README rewrite — architecture diagram (Mermaid), screenshots, live URL, "10x scale" section, scope statement
 - [ ] `docs/ARCHITECTURE.md` (with "Deferred decisions" section listing BullMQ/Redis, multi-region, read replicas, etc.)
 - [ ] `docs/DATABASE.md` (schema rationale, index choices, VACUUM/autovacuum paragraph)
-- [ ] **ADR-002** — GiST on `location` geography column
-- [ ] **ADR-004** — co-locating API + DB on Fly's private network
 - [ ] 3-minute Loom walkthrough
 - [ ] **Checkpoint:** Live URL works, README is shareable, Loom is recorded
 
@@ -91,15 +105,73 @@ Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
 4. `chore: pin pnpm integrity hash in packageManager`
 5. `chore: add docker compose stack for local Postgres 16 + PostGIS 3.5`
 6. `docs(adr): 003 — idempotent upsert via (source_id, external_id)`
-7. `docs: add PLAN.md and reference from CLAUDE.md` — *this commit, after writing this file*
+7. `docs: add PLAN.md for session continuity`
+8. `docs: pull ADRs 001/002/004 forward to Week 1 (ADR-first ordering)` — *this commit*
+
+(Authoritative list: `git log --oneline -10`. If git disagrees with this list, trust git and update this file.)
 
 ---
 
 ## Next move
 
-**Step 5 of "First-day moves" in the kickoff brief:** Drizzle schema for `cities` and `events`, generate and apply the first migration. Plan in two commits:
+**Write ADRs 001, 002, and 004 before any schema work.** This is a deliberate inversion of the brief's original schedule (which puts 001 in Week 2, 002/004 in Week 3) — see "ADR-first ordering" under **Decisions made since the brief** for the rationale. ADR-003 is already written and committed (`docs/adr/003-idempotent-upsert-via-source-external-id.md`); use it as the format reference.
 
-### Commit A — `chore: install TypeScript and Drizzle tooling`
+ADR conventions for this project:
+
+- File path: `docs/adr/NNN-slug.md`
+- Sections, in order: **Status** (Accepted — YYYY-MM-DD) / **Context** / **Decision** / **Consequences** / **Alternatives considered**
+- Length: 80-150 lines is typical; ADR-003 ran ~110 and is a good calibration point
+- Tone: deliberate, defensible, written for a senior reviewer who will push back on hand-waving
+- One ADR per commit; commit message format `docs(adr): NNN — slug`
+- Once accepted, ADRs are immutable in spirit. To revise, write a successor ADR with status "Supersedes ADR-NNN" and update the original's status to "Superseded by ADR-MMM"
+
+### ADR-001 — BRIN index on `event_start_at`
+
+Justify BRIN over B-tree for an append-mostly time-series-like column. Required content (per kickoff brief):
+
+- Typical query pattern: range scans (next 7 days, next 30 days, "this week", "tomorrow")
+- BRIN on-disk size vs B-tree — BRIN summarizes block ranges, so it's orders of magnitude smaller for a column whose values correlate with physical row order
+- When BRIN starts failing: heavy random inserts that disturb correlation; frequent in-place updates that cause HOT-prevention churn; bulk DELETEs that fragment the table
+- How this would change at 10x or 100x scale: still appropriate for a time-series-like column; the size advantage grows with row count; revisit if a non-time-series access pattern emerges
+- Reference: Postgres 16 BRIN docs (`https://www.postgresql.org/docs/16/brin-intro.html`) and `pages_per_range` storage parameter
+- Alternatives considered: B-tree (rejected for size at scale), no index (rejected — full table scan unacceptable), partial B-tree on `state = 'active'` only (worth mentioning, but BRIN composes well with the existing partial composite indexes)
+
+Commit as `docs(adr): 001 — BRIN index on event_start_at`.
+
+### ADR-002 — GiST index on `events.location` geography column
+
+Justify GiST over no-index for spatial queries. Required content:
+
+- What GiST is — Generalized Search Tree, an extensible indexing framework that supports arbitrary key types via operator class plugins
+- The R-tree-on-GiST adaptation — bounding-box decomposition that suits 2D geographic data and supports radial queries (`ST_DWithin`), bounding-box queries (`&&`), and KNN ordering
+- Alternative: SP-GiST (space-partitioned GiST) — better for non-uniformly-distributed point data with hard partitioning; not our case at v0 (Lima events cluster around districts)
+- Cost: slower writes (rebalancing on insert/update), larger index than the data column itself for point geometries
+- Benefit: radial queries become tractable instead of full-table sequential scans with per-row `ST_Distance` calls
+- When this would change: extremely high write rate or highly skewed distribution might warrant SP-GiST; not realistic at v0 scale
+- Alternatives considered: no index (rejected — radial queries unusable), B-tree on `(ST_X(location), ST_Y(location))` (rejected — doesn't support `&&` or `ST_DWithin` properly)
+
+Commit as `docs(adr): 002 — GiST index on events.location`.
+
+### ADR-004 — Co-locating API and Postgres on Fly.io's private network
+
+Justify the topology over the alternative of "managed Postgres on a separate provider (Neon, Supabase, Render) talking to Fly over the public internet." Required content:
+
+- Latency tax of cross-provider TLS round-trips: 5-150ms per round-trip depending on region pairing, regardless of how fast the database itself is
+- N+1 amplification: an API request that issues 5 sequential DB queries pays the latency tax 5 times
+- Operational simplification: one provider, one secrets store, one billing surface, one observability surface
+- Learning value: seeing Fly's volumes, secrets, machines, and IPv6 private networking up close is core to the portfolio narrative for this project
+- The explicit tradeoff: Fly Postgres is "managed orchestration of self-managed PG", not a fully managed product like RDS — meaning we accept responsibility for upgrades, disk monitoring, and backup verification
+- Region: `scl` (Santiago) — closest Fly region to Lima
+- When this would be revisited: paying customers (stricter RTO/RPO), multi-region read replicas, observed disk-monitoring fatigue
+- Alternatives considered: Neon (managed but cross-provider latency), Supabase (managed + extras we don't need), AWS RDS (overkill for v0 cost target), self-managed on a generic VPS (worst-of-both)
+
+Commit as `docs(adr): 004 — co-locating API and Postgres on Fly's private network`.
+
+### After all four ADRs are landed
+
+Proceed to **step 5** of the brief's "First-day moves" — Drizzle schema for `cities` and `events` tables; first migration applied locally. Two-commit plan:
+
+#### Commit A — `chore: install TypeScript and Drizzle tooling`
 
 - Root devDeps: `typescript`, `@types/node`
 - Root: `tsconfig.base.json` (strict; `noUncheckedIndexedAccess`; `verbatimModuleSyntax`)
@@ -110,19 +182,18 @@ Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
 - `packages/db/src/schema/index.ts` (empty barrel)
 - `packages/db/package.json` scripts: `generate`, `migrate`, `studio`
 
-### Commit B — `feat(db): initial schema with cities and events tables`
+#### Commit B — `feat(db): initial schema with cities and events tables`
 
 - `src/schema/cities.ts` (small reference table; one row at v0 — Lima)
 - `src/schema/events.ts` (with all indexes from the brief)
 - `src/schema/index.ts` (re-export barrel)
 - Generated migration `migrations/0000_initial_schema.sql`, manually augmented to:
   - Prepend `CREATE EXTENSION IF NOT EXISTS postgis;`
-  - Add the BRIN index on `start_at` (Drizzle Kit doesn't generate non-btree types — added by hand)
-  - Add the GiST index on `location`
+  - Add the BRIN index on `start_at` (Drizzle Kit doesn't generate non-btree types — added by hand). Cite ADR-001 in a comment.
+  - Add the GiST index on `location`. Cite ADR-002.
   - Add the partial composite indexes (`(city_id, state, start_at) WHERE state = 'active'`, `(city_id, category) WHERE state = 'active'`)
-  - Append the Lima seed `INSERT`
-- One-line per non-btree index: forward-reference its future ADR (ADR-001 BRIN, ADR-002 GiST)
-- Apply via `pnpm -F db migrate` against the running local DB; verify with `psql \d events` and `\di`
+  - Append the Lima seed `INSERT INTO cities ...` with `ST_GeogFromText('SRID=4326;POINT(-77.0428 -12.0464)')`
+- Apply via `pnpm -F db migrate` against the running local DB; verify with `psql \d events` and `\di events*`
 
 **After step 5:** stub scraper emitting 3 hardcoded fake events (step 6 in the brief), then wire `node-cron` (step 7), then real scrape replaces the fakes.
 
@@ -140,6 +211,7 @@ These are deliberate choices made during kickoff that diverge from or refine the
 - **Fly region: `scl` (Santiago)**. Closest Fly region to Lima.
 - **Postgres-js (`postgres` package) over `pg`** for the Drizzle binding. Drizzle's primary recommendation since 0.30; faster, simpler API. *Pending — applied in Commit A above.*
 - **Git committer identity:** `Kenji Kina <679022+Kenji-K@users.noreply.github.com>` (GitHub noreply form). Set globally to keep the user's real address out of the public git log if/when the repo opens up.
+- **ADR-first ordering.** The brief schedules ADRs 001/002/004 in Weeks 2-3, after the corresponding code lands. We are pulling them forward to Week 1, before the schema migration. Rationale: writing the ADRs first means the schema implements decisions that are written down and defended; writing them after means the ADRs are retroactive justification, which weakens the senior-signal value of the project. The brief's own framing of ADR-003 — *"doing it early forces the data model to be honest"* — is the more rigorous interpretation of all data-model and topology ADRs, not just upsert. The brief's per-ADR specification is detailed enough that nothing speculative is required to write them upfront. Risk: implementation may surface a wrinkle that the ADR didn't anticipate, in which case we add an amendment ADR or a successor with `Status: Supersedes ADR-NNN` — that's normal ADR practice, not a defect. This ordering decision should itself probably become an ADR (or a paragraph in `docs/ARCHITECTURE.md`) once those exist.
 
 ---
 

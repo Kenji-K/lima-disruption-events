@@ -1,9 +1,11 @@
 # CLAUDE.md — Lima Disruption Events v0
 
 ## Project
+
 Backend + React frontend that ingests upcoming disruption events for Lima (concerts, road closures, sporting events) from public sources, indexes them by time and geography, and renders them on a map and filterable list. v0 of a system called Disruption Intelligence. Solo developer. Treat as production-quality code, not throwaway demo. Repo is private at start; no customer names or business-sensitive specifics in code or commits.
 
 ## Stack
+
 - TypeScript everywhere; pnpm workspaces (`apps/api`, `apps/web`, `packages/db`, `packages/shared`)
 - Backend: Fastify + Drizzle ORM + PostgreSQL 16 + PostGIS
 - Job scheduling: `node-cron` in-process inside the API. **No BullMQ, no Redis** — see `/docs/adr/` and ARCHITECTURE.md "Deferred decisions".
@@ -15,6 +17,7 @@ Backend + React frontend that ingests upcoming disruption events for Lima (conce
 - Hosting: API + Postgres co-located on Fly.io (private `6PN` network, single region); frontend on Vercel.
 
 ## Commands
+
 ```bash
 pnpm install                 # install all workspaces
 docker compose up -d         # start local Postgres + PostGIS
@@ -27,6 +30,7 @@ pnpm test                    # run all tests (including Testcontainers integrati
 ```
 
 ## Conventions — non-negotiable
+
 - **Idempotent writes.** External mutations through deterministic keys; `ON CONFLICT` clauses explicit, not implicit.
 - **Schema validation at every boundary.** Zod schemas at HTTP request, HTTP response, scraper output, env config.
 - **Real database in tests.** Testcontainers + real PostGIS. Never mock the DB.
@@ -35,12 +39,14 @@ pnpm test                    # run all tests (including Testcontainers integrati
 - **Errors classified.** Operational (retryable) vs. programmer (bug, surface immediately) vs. external (4xx vs 5xx).
 - **Config via env, validated at boot.** Zod-validated env schema; refuse to start with bad config rather than crashing mid-flight.
 - **Retries on scrape jobs.** Exponential backoff, max-attempts cap, structured failure logs. A failed scrape must not block the next scheduled run.
+- **ADRs precede implementation.** Write the ADR for a non-trivial decision before writing the code that implements it — not after, as retroactive justification. ADRs are immutable in spirit; revise via a successor ADR (`Status: Supersedes ADR-NNN`), don't edit accepted ones. One ADR per commit, message format `docs(adr): NNN — slug`.
 
 ## Picking up where we left off — read first
 
 - `/docs/PLAN.md` — current state, milestone checkboxes, next move, and decisions made since the kickoff brief that aren't yet in ADRs. Read this first at the start of any session. Update it after sessions that advance the project.
 
 ## Architecture references — read on demand
+
 - `/docs/ARCHITECTURE.md` — system overview, Mermaid diagram, "Deferred decisions" section
 - `/docs/DATABASE.md` — schema rationale, index choices, VACUUM/autovacuum notes
 - `/docs/adr/` — decision records:
@@ -50,9 +56,11 @@ pnpm test                    # run all tests (including Testcontainers integrati
   - `004-co-locating-api-and-db-on-fly-private-network.md`
 
 ## Out of scope for v0 — do not build
+
 Authentication, user accounts, multi-tenant, predictive impact modeling, route-impact analysis, anomaly detection, SLA alerts, email digests, customer-facing briefs, admin UI, payments, multiple cities, ML/LLM features. If any of these start feeling necessary, surface to the user before writing code.
 
 ## Ask the user before
+
 - Deviating from the locked stack
 - Adding any feature in the "out of scope" list
 - Skipping or postponing one of the four ADRs
@@ -61,4 +69,5 @@ Authentication, user accounts, multi-tenant, predictive impact modeling, route-i
 - Editing a checked-in migration
 
 ## Session hygiene
+
 Use `/clear` between major task units (backend → frontend, finishing a feature, starting a new ADR). Keep this file under ~150 lines; if it grows, that's a signal something belongs in ARCHITECTURE.md or an ADR instead.
