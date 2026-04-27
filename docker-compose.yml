@@ -1,0 +1,28 @@
+# Local development stack: Postgres 16 + PostGIS only.
+# No Redis — see docs/ARCHITECTURE.md "Deferred decisions" for the
+# job-scheduling rationale (in-process node-cron, queue infra deferred).
+#
+# Image note: imresamu/postgis is a multi-arch (amd64 + arm64) mirror of
+# postgis/postgis. Official postgis/postgis lacks arm64 builds, which is a
+# blocker on Apple Silicon. Tags mirror upstream 1:1.
+
+services:
+  postgres:
+    image: imresamu/postgis:16-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: disruption_intelligence
+      POSTGRES_USER: disruption_intelligence
+      POSTGRES_PASSWORD: disruption_intelligence
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U disruption_intelligence -d disruption_intelligence"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
