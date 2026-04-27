@@ -88,7 +88,7 @@ Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
 
 ## Current state
 
-**Branch:** `main`, ahead of `origin/main` by 7 commits (not pushed).
+**Branch:** `main`. Not yet pushed to `origin` (origin still at `Initial commit`). Run `git log --oneline 4ae7626..HEAD` for the authoritative since-Initial commit list — it should align with the **Recent commits** list below.
 
 **Local stack running:**
 
