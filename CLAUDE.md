@@ -36,6 +36,10 @@ pnpm test                    # run all tests (including Testcontainers integrati
 - **Config via env, validated at boot.** Zod-validated env schema; refuse to start with bad config rather than crashing mid-flight.
 - **Retries on scrape jobs.** Exponential backoff, max-attempts cap, structured failure logs. A failed scrape must not block the next scheduled run.
 
+## Picking up where we left off — read first
+
+- `/docs/PLAN.md` — current state, milestone checkboxes, next move, and decisions made since the kickoff brief that aren't yet in ADRs. Read this first at the start of any session. Update it after sessions that advance the project.
+
 ## Architecture references — read on demand
 - `/docs/ARCHITECTURE.md` — system overview, Mermaid diagram, "Deferred decisions" section
 - `/docs/DATABASE.md` — schema rationale, index choices, VACUUM/autovacuum notes
