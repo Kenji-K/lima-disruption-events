@@ -1,0 +1,11 @@
+{
+  "name": "lima-disruption-events",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Ingests upcoming disruption events for Lima from public sources; indexes by time and geography; renders on a map and filterable list.",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "packageManager": "pnpm@10.33.2"
+}
