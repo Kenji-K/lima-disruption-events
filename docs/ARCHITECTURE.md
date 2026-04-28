@@ -34,6 +34,14 @@ Concrete instances:
 - Local dev database: name / user / password all `disruption_intelligence`
 - Repo: `lima-disruption-events` (externally visible)
 
+### Customer-facing language: Spanish (es-PE)
+
+All user-visible UI text is in **Peruvian Spanish**: chrome (buttons, filter chips, drawer headings, toolbar labels), data labels surfaced to humans (category names, empty states), date/time formatting (`Intl` with locale `'es-PE'` and `timeZone: 'America/Lima'`), and any eventual marketing/landing copy. The customers are Lima operators; the *interface* must speak their language even though the *codebase* doesn't.
+
+**In scope (Spanish):** UI strings, button labels, placeholders, category labels rendered to users, relative-time suffixes ("en 3d", "hace 2h"), error messages surfaced in the browser.
+
+**Out of scope (English):** code identifiers, type names, file paths, comments, commit messages, log lines (pino), API field names, database column names, ADR text, internal docs (`PLAN.md`, `ARCHITECTURE.md`, `CLAUDE.md`, this file). Internal artifacts stay in English so the engineering surface stays a single dialect.
+
 ### Local dev Postgres image: `imresamu/postgis:16-3.5`
 
 `docker-compose.yml` pulls `imresamu/postgis:16-3.5` rather than the official `postgis/postgis:16-3.5`. Reason: the official image has no arm64 build; `imresamu/postgis` is a multi-arch mirror maintained by long-time PostGIS contributor Imre Samu, mirroring upstream tags 1:1. Local-dev only — Fly Postgres in production runs amd64 on Fly's infrastructure (see [ADR-004](adr/004-co-locating-api-and-db-on-fly-private-network.md)).
