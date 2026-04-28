@@ -11,7 +11,7 @@ This file is the single source of truth for "what now?". Update it after any com
 When picking up the project in a fresh chat, run through this before doing any new work:
 
 1. **Read this file (`docs/PLAN.md`) and `CLAUDE.md`.** CLAUDE.md is auto-loaded; this file you should re-read in full each session because it changes between sessions.
-2. **Confirm git state matches "Current state" below:** `git log --oneline -10` should show the same recent commits in the same order. If it doesn't, reconcile before proceeding (someone else committed, or this file is stale).
+2. **Confirm git state matches "Current state" below:** read the **Last sync point** in *Current state*; if `git log <sync-sha>..HEAD` is non-empty, work landed after this file was last synced — read those commits before trusting "Next move."
 3. **Confirm the local DB is healthy:** `docker compose ps` should show the postgres service `Up (healthy)`. If not running, `docker compose up -d --wait`. If a port conflict appears, the user has another Postgres on `:5432` (likely the postgresql@15 client tools they have via Homebrew — but the server may be running too).
 4. **Confirm Node + pnpm:** `node --version` should report `v24.x` (fnm auto-switches via `.nvmrc`); `pnpm --version` should report `10.33.2`. If `node` is "command not found", the parent shell didn't source the fnm init from `~/.zshrc` — run `eval "$(fnm env --use-on-cd)"` in that shell.
 5. **Read the "Next move" section below.** That's the immediate task. If it doesn't make sense given the rest of the file, ask the user before proceeding — PLAN.md may have drifted from reality.
@@ -36,9 +36,9 @@ Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
 - [x] Node 24 LTS + pnpm 10.33.2 pinned (`.nvmrc`, `engines`, `packageManager` w/ SHA-512)
 - [x] `docker-compose.yml` — Postgres 16 + PostGIS 3.5 (no Redis)
 - [x] **ADR-003** — idempotent upsert via `(source_id, external_id)`
-- [ ] **ADR-001** — BRIN index on `event_start_at` *(pulled forward from Week 2; see "ADR-first ordering" below)*
-- [ ] **ADR-002** — GiST index on `events.location` geography column *(pulled forward from Week 3)*
-- [ ] **ADR-004** — co-locating API + DB on Fly's private network *(pulled forward from Week 3)*
+- [x] **ADR-001** — BRIN index on `event_start_at` *(pulled forward from Week 2; see "ADR-first ordering" below)*
+- [x] **ADR-002** — GiST index on `events.location` geography column *(pulled forward from Week 3)*
+- [x] **ADR-004** — co-locating API + DB on Fly's private network *(pulled forward from Week 3)*
 - [ ] Drizzle schema for `cities` + `events` tables; first migration applied locally
 - [ ] One scraper (HTML source, TBD) writing through the idempotent upsert pipeline
 - [ ] Idempotent upsert pipeline with retry + structured logs (pino)
@@ -88,7 +88,9 @@ Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
 
 ## Current state
 
-**Branch:** `main`. Not yet pushed to `origin` (origin still at `Initial commit`). Run `git log --oneline 4ae7626..HEAD` for the authoritative since-Initial commit list — it should align with the **Recent commits** list below.
+**Branch:** `main`. Not yet pushed to `origin` (origin still at `Initial commit`). For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
+
+**Last sync point:** `ef233d6 docs(adr): 004 — co-locating API and Postgres on Fly's private network`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log ef233d6..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
 
 **Local stack running:**
 
@@ -97,81 +99,13 @@ Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
 - Local DB: name `disruption_intelligence`, user `disruption_intelligence`, password `disruption_intelligence` (dev-only, in `.env.example`). Connection: `postgres://disruption_intelligence:disruption_intelligence@localhost:5432/disruption_intelligence`.
 - No tables yet (Drizzle schema is the next step).
 
-**Recent commits (most recent last):**
-
-1. `chore: add CLAUDE.md`
-2. `chore: initialize pnpm workspace`
-3. `chore: rename workspace scope to @disruption-intelligence`
-4. `chore: pin pnpm integrity hash in packageManager`
-5. `chore: add docker compose stack for local Postgres 16 + PostGIS 3.5`
-6. `docs(adr): 003 — idempotent upsert via (source_id, external_id)`
-7. `docs: add PLAN.md for session continuity`
-8. `docs: pull ADRs 001/002/004 forward to Week 1 (ADR-first ordering)` — *this commit*
-
-(Authoritative list: `git log --oneline -10`. If git disagrees with this list, trust git and update this file.)
-
 ---
 
 ## Next move
 
-**Write ADRs 001, 002, and 004 before any schema work.** This is a deliberate inversion of the brief's original schedule (which puts 001 in Week 2, 002/004 in Week 3) — see "ADR-first ordering" under **Decisions made since the brief** for the rationale. ADR-003 is already written and committed (`docs/adr/003-idempotent-upsert-via-source-external-id.md`); use it as the format reference.
+Land the initial Drizzle schema in two commits. All four ADRs (001/002/003/004) are written, so the schema implements decisions that are already documented and defended — the migration file should cite ADRs 001 and 002 by number in SQL comments next to the indexes they justify.
 
-ADR conventions for this project:
-
-- File path: `docs/adr/NNN-slug.md`
-- Sections, in order: **Status** (Accepted — YYYY-MM-DD) / **Context** / **Decision** / **Consequences** / **Alternatives considered**
-- Length: 80-150 lines is typical; ADR-003 ran ~110 and is a good calibration point
-- Tone: deliberate, defensible, written for a senior reviewer who will push back on hand-waving
-- One ADR per commit; commit message format `docs(adr): NNN — slug`
-- Once accepted, ADRs are immutable in spirit. To revise, write a successor ADR with status "Supersedes ADR-NNN" and update the original's status to "Superseded by ADR-MMM"
-
-### ADR-001 — BRIN index on `event_start_at`
-
-Justify BRIN over B-tree for an append-mostly time-series-like column. Required content (per kickoff brief):
-
-- Typical query pattern: range scans (next 7 days, next 30 days, "this week", "tomorrow")
-- BRIN on-disk size vs B-tree — BRIN summarizes block ranges, so it's orders of magnitude smaller for a column whose values correlate with physical row order
-- When BRIN starts failing: heavy random inserts that disturb correlation; frequent in-place updates that cause HOT-prevention churn; bulk DELETEs that fragment the table
-- How this would change at 10x or 100x scale: still appropriate for a time-series-like column; the size advantage grows with row count; revisit if a non-time-series access pattern emerges
-- Reference: Postgres 16 BRIN docs (`https://www.postgresql.org/docs/16/brin-intro.html`) and `pages_per_range` storage parameter
-- Alternatives considered: B-tree (rejected for size at scale), no index (rejected — full table scan unacceptable), partial B-tree on `state = 'active'` only (worth mentioning, but BRIN composes well with the existing partial composite indexes)
-
-Commit as `docs(adr): 001 — BRIN index on event_start_at`.
-
-### ADR-002 — GiST index on `events.location` geography column
-
-Justify GiST over no-index for spatial queries. Required content:
-
-- What GiST is — Generalized Search Tree, an extensible indexing framework that supports arbitrary key types via operator class plugins
-- The R-tree-on-GiST adaptation — bounding-box decomposition that suits 2D geographic data and supports radial queries (`ST_DWithin`), bounding-box queries (`&&`), and KNN ordering
-- Alternative: SP-GiST (space-partitioned GiST) — better for non-uniformly-distributed point data with hard partitioning; not our case at v0 (Lima events cluster around districts)
-- Cost: slower writes (rebalancing on insert/update), larger index than the data column itself for point geometries
-- Benefit: radial queries become tractable instead of full-table sequential scans with per-row `ST_Distance` calls
-- When this would change: extremely high write rate or highly skewed distribution might warrant SP-GiST; not realistic at v0 scale
-- Alternatives considered: no index (rejected — radial queries unusable), B-tree on `(ST_X(location), ST_Y(location))` (rejected — doesn't support `&&` or `ST_DWithin` properly)
-
-Commit as `docs(adr): 002 — GiST index on events.location`.
-
-### ADR-004 — Co-locating API and Postgres on Fly.io's private network
-
-Justify the topology over the alternative of "managed Postgres on a separate provider (Neon, Supabase, Render) talking to Fly over the public internet." Required content:
-
-- Latency tax of cross-provider TLS round-trips: 5-150ms per round-trip depending on region pairing, regardless of how fast the database itself is
-- N+1 amplification: an API request that issues 5 sequential DB queries pays the latency tax 5 times
-- Operational simplification: one provider, one secrets store, one billing surface, one observability surface
-- Learning value: seeing Fly's volumes, secrets, machines, and IPv6 private networking up close is core to the portfolio narrative for this project
-- The explicit tradeoff: Fly Postgres is "managed orchestration of self-managed PG", not a fully managed product like RDS — meaning we accept responsibility for upgrades, disk monitoring, and backup verification
-- Region: `scl` (Santiago) — closest Fly region to Lima
-- When this would be revisited: paying customers (stricter RTO/RPO), multi-region read replicas, observed disk-monitoring fatigue
-- Alternatives considered: Neon (managed but cross-provider latency), Supabase (managed + extras we don't need), AWS RDS (overkill for v0 cost target), self-managed on a generic VPS (worst-of-both)
-
-Commit as `docs(adr): 004 — co-locating API and Postgres on Fly's private network`.
-
-### After all four ADRs are landed
-
-Proceed to **step 5** of the brief's "First-day moves" — Drizzle schema for `cities` and `events` tables; first migration applied locally. Two-commit plan:
-
-#### Commit A — `chore: install TypeScript and Drizzle tooling`
+### Commit A — `chore: install TypeScript and Drizzle tooling`
 
 - Root devDeps: `typescript`, `@types/node`
 - Root: `tsconfig.base.json` (strict; `noUncheckedIndexedAccess`; `verbatimModuleSyntax`)
@@ -182,10 +116,10 @@ Proceed to **step 5** of the brief's "First-day moves" — Drizzle schema for `c
 - `packages/db/src/schema/index.ts` (empty barrel)
 - `packages/db/package.json` scripts: `generate`, `migrate`, `studio`
 
-#### Commit B — `feat(db): initial schema with cities and events tables`
+### Commit B — `feat(db): initial schema with cities and events tables`
 
 - `src/schema/cities.ts` (small reference table; one row at v0 — Lima)
-- `src/schema/events.ts` (with all indexes from the brief)
+- `src/schema/events.ts` (with all indexes per ADRs 001/002 plus the partial composites)
 - `src/schema/index.ts` (re-export barrel)
 - Generated migration `migrations/0000_initial_schema.sql`, manually augmented to:
   - Prepend `CREATE EXTENSION IF NOT EXISTS postgis;`
@@ -195,7 +129,7 @@ Proceed to **step 5** of the brief's "First-day moves" — Drizzle schema for `c
   - Append the Lima seed `INSERT INTO cities ...` with `ST_GeogFromText('SRID=4326;POINT(-77.0428 -12.0464)')`
 - Apply via `pnpm -F db migrate` against the running local DB; verify with `psql \d events` and `\di events*`
 
-**After step 5:** stub scraper emitting 3 hardcoded fake events (step 6 in the brief), then wire `node-cron` (step 7), then real scrape replaces the fakes.
+**After Commit B:** stub scraper emitting 3 hardcoded fake events (step 6 in the brief), then wire `node-cron` (step 7), then real scrape replaces the fakes.
 
 ---
 
@@ -229,7 +163,7 @@ These are deliberate choices made during kickoff that diverge from or refine the
 After each work session that advances the project, update this file:
 
 1. Tick milestone checkboxes for items completed
-2. Refresh **Current state** (commit list, what's running)
+2. Refresh **Current state** (bump **Last sync point** to the new HEAD, update what's running if it changed)
 3. Rewrite **Next move** to reflect the new pickup point
 4. Add to **Decisions made since the brief** if any non-obvious choice was made
 
