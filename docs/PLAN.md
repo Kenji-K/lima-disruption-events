@@ -12,19 +12,9 @@ When picking up the project in a fresh chat, run through this before doing any n
 
 1. **Read this file (`docs/PLAN.md`) and `CLAUDE.md`.** CLAUDE.md is auto-loaded; this file you should re-read in full each session because it changes between sessions.
 2. **Confirm git state matches "Current state" below:** read the **Last sync point** in *Current state*; if `git log <sync-sha>..HEAD` is non-empty, work landed after this file was last synced — read those commits before trusting "Next move."
-3. **Confirm the local DB is healthy:** `docker compose ps` should show the postgres service `Up (healthy)`. If not running, `docker compose up -d --wait`. If a port conflict appears, the user has another Postgres on `:5432` (likely the postgresql@15 client tools they have via Homebrew — but the server may be running too).
-4. **Confirm Node + pnpm:** `node --version` should report `v24.x` (fnm auto-switches via `.nvmrc`); `pnpm --version` should report `10.33.2`. If `node` is "command not found", the parent shell didn't source the fnm init from `~/.zshrc` — run `eval "$(fnm env --use-on-cd)"` in that shell.
-5. **Read the "Next move" section below.** That's the immediate task. If it doesn't make sense given the rest of the file, ask the user before proceeding — PLAN.md may have drifted from reality.
+3. **Read the "Next move" section below.** That's the immediate task. If it doesn't make sense given the rest of the file, ask the user before proceeding — PLAN.md may have drifted from reality.
 
-If steps 2-4 surface anything unexpected, surface it to the user before changing code. The kickoff brief that started this project is **one-shot** (not committed in the repo) — do not expect to find it in conversation history. PLAN.md, CLAUDE.md, and the ADRs in `docs/adr/` are the only authoritative project artifacts.
-
----
-
-## Scope (one paragraph)
-
-Lima Disruption Events v0 is the first deployable slice of Disruption Intelligence (B2B mobility intelligence, Lima-anchored, solo founder). It ingests upcoming disruption events for Lima from two public sources, indexes them by time and geography in PostgreSQL+PostGIS, exposes a small REST API, and renders them on a React map + filterable list with a per-event detail drawer. The v0 has two simultaneous purposes: a senior-level portfolio piece (especially around Postgres internals — BRIN, GiST, VACUUM) and the first reusable technical slice of the real business. Out of scope: auth, multi-tenant, predictive impact modeling, multiple cities, ML/LLM. Stack is locked: TypeScript, Fastify, Drizzle, Postgres 16 + PostGIS, `node-cron` in-process (no Redis/BullMQ for v0), Vite + React + MapLibre, Vitest + Testcontainers, Fly.io for API + DB, Vercel for web.
-
-Full scope, conventions, and "ask the user before" rules live in `CLAUDE.md`.
+If anything in step 2 looks wrong, surface it to the user before changing code. If the local stack isn't responding when you go to run code, the setup is documented in `CLAUDE.md` and `docker-compose.yml` — don't re-derive it from scratch. The kickoff brief that started this project is **one-shot** (not committed in the repo) — do not expect to find it in conversation history. PLAN.md, CLAUDE.md, [`docs/ARCHITECTURE.md`](ARCHITECTURE.md), and the ADRs in [`docs/adr/`](adr/) are the only authoritative project artifacts.
 
 ---
 
