@@ -13,11 +13,23 @@ Until then, the sections below are the canonical record of project conventions p
 
 ## Conventions and decisions not in ADRs
 
+### Product positioning — what v0 is and is not
+
+The local v0 builds the **disruption-ingestion tier** of a B2B mobility-intelligence product, not the full customer-facing product. The full product (per the Notion business plan; see [`CLAUDE.md`](../CLAUDE.md) "Architecture references" for the link) layers per-customer route overlays, SLA risk flags, anomaly alerts, and a weekly advisory call on top of the calendar this v0 ingests. None of those are in v0 scope.
+
+Implications:
+
+- **README and any public-facing framing** must lead with this scope statement. The v0 looks superficially like a consumer map app; the business is explicitly B2B. Notion plan Tema 2 positioning anchor: *"Waze le habla a los conductores; nosotros le hablamos a los operadores."* Anchor against that, not against the visual shape of the v0.
+- **When showing the v0 to a stakeholder**, lead with the scope statement before the live URL — otherwise expectations form around the visible artifact rather than the actual product. Notion plan Tema 5 Step 22 is explicit on this: lock MVBP scope so future feature requests default to v2+.
+
+**Sequence inversion is deliberate.** The v0 runs ahead of "Etapa 0" prerequisites in the Notion plan (SAC registration, 50-prospect list, 10 customer-discovery interviews, Tesis evidence-gathering). Rationale: tech-stack familiarity with Drizzle / Fastify / PostGIS / MapLibre / Testcontainers; full use of the Claude Code subscription; a concrete portfolio artifact for senior-role interviews; a tangible artifact to ground stakeholder conversations in. The trade-off — premature stakeholder anchoring on the wrong product shape — is mitigated by the two framing rules above.
+
 ### Naming — internal identifiers vs. external product names
 
 Internal scope, package, database, file, and code identifiers use `disruption_intelligence` (the long-term company name). Externally-facing product names — repo name, root `package.json` name, the eventual product surface — stay Lima-anchored, since the v0 product *is* Lima-specific even if the platform behind it isn't.
 
 Concrete instances:
+
 - pnpm workspace scope: `@disruption-intelligence/*`
 - Local dev database: name / user / password all `disruption_intelligence`
 - Repo: `lima-disruption-events` (externally visible)

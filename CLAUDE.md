@@ -31,6 +31,14 @@ pnpm -F db migrate           # apply migrations to local DB
 pnpm test                    # run all tests (including Testcontainers integration tests)
 ```
 
+## ADR Workflow
+
+- **ADRs precede implementation.** Write the ADR for a non-trivial decision before writing the code that implements it — not after, as retroactive justification.
+- **Numerical order matters.** Always write ADRs in the exact numerical order specified in the brief before implementing related code/schema changes.
+- **Confirm before starting.** Confirm ADR ordering against the project brief before starting any implementation step.
+- **Immutable in spirit.** Revise via a successor ADR (`Status: Supersedes ADR-NNN`), don't edit accepted ones.
+- **One ADR per commit.** Message format: `docs(adr): NNN — slug`.
+
 ## Conventions — non-negotiable
 
 - **Idempotent writes.** External mutations through deterministic keys; `ON CONFLICT` clauses explicit, not implicit.
@@ -41,7 +49,7 @@ pnpm test                    # run all tests (including Testcontainers integrati
 - **Errors classified.** Operational (retryable) vs. programmer (bug, surface immediately) vs. external (4xx vs 5xx).
 - **Config via env, validated at boot.** Zod-validated env schema; refuse to start with bad config rather than crashing mid-flight.
 - **Retries on scrape jobs.** Exponential backoff, max-attempts cap, structured failure logs. A failed scrape must not block the next scheduled run.
-- **ADRs precede implementation.** Write the ADR for a non-trivial decision before writing the code that implements it — not after, as retroactive justification. ADRs are immutable in spirit; revise via a successor ADR (`Status: Supersedes ADR-NNN`), don't edit accepted ones. One ADR per commit, message format `docs(adr): NNN — slug`.
+- **ADRs.** See `## ADR Workflow` above for the full ruleset (ordering, immutability, commit format).
 
 ## Picking up where we left off — read first
 
@@ -50,13 +58,19 @@ pnpm test                    # run all tests (including Testcontainers integrati
 
 ## Architecture references — read on demand
 
-- `/docs/ARCHITECTURE.md` — *also under "read first" above for conventions/decisions.* Week 3 expansion: system overview, Mermaid diagram, "Deferred decisions" section with revisit triggers.
+- `/docs/ARCHITECTURE.md` — *also under "read first" above for conventions/decisions.* Week 3 expansion: system overview, Mermaid diagram, "Deferred decisions" section with revisit triggers. Also home to **"Product positioning"** — the v0's relationship to the broader Notion business plan.
 - `/docs/DATABASE.md` — schema rationale, index choices, VACUUM/autovacuum notes
 - `/docs/adr/` — decision records:
   - `001-brin-index-on-event-start-at.md`
   - `002-gist-index-on-geography-column.md`
   - `003-idempotent-upsert-via-source-external-id.md`
   - `004-co-locating-api-and-db-on-fly-private-network.md`
+- **Notion business plan** — [Disruption Intelligence — Plan de Startup](https://www.notion.so/34b03c87ab7081498ebdc8ed77cc7311). Full strategic plan in Spanish (Brújula = Vision/Mission/Tesis/Mapa Mental/Founder Principles; Hoja de Ruta por Etapas = 6-stage roadmap; Aulet 24-step framework across 6 themes; risk register). The v0 in this repo is the **disruption-ingestion tier** of the broader B2B product the plan describes. Read on demand for customer / positioning / strategy / fundraising questions; not needed for the v0 build itself.
+
+## File Location Conventions
+
+- Before creating any new persistent docs (MEMORY.md, ARCHITECTURE.md, reference files, etc.), confirm the intended location (project root vs. user-level ~/.claude vs. docs/) with the user.
+- Cross-reference existing docs (PLAN.md, ADRs, Notion business plan) before adding new ones to avoid duplication.
 
 ## Out of scope for v0 — do not build
 

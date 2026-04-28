@@ -73,6 +73,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 - [ ] OpenAPI spec generated and accurate
 - [ ] `CLAUDE.md` reflects the actual current commands and conventions
 - [ ] Loom recorded and linked from README
+- [ ] **Disruption-density check (T+30 days)** — once both scrapers have been live in production for 30 days, document weekly event count, geographic spread across Lima, and source-mix. This is the cheap evidence for Notion plan Tesis premise #2 (the assumption that public sources are dense enough to assemble a useful Lima calendar; see also Aulet Tema 5 Step 21). Closing this loop is the most useful learning the v0 can produce. Fires after deploy, not as part of the 3-week sprint.
 
 ---
 
