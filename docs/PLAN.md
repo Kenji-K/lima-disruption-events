@@ -129,6 +129,7 @@ Land the initial Drizzle schema in two commits. All four ADRs (001/002/003/004) 
 - **Map tile provider** — MapTiler free tier vs OpenFreeMap. Decision deferred to Week 2.
 - **shadcn/ui or Tailwind-only** — engineer's call if time permits in Week 3.
 - **Postgres machine size on Fly** — start with smallest dev cluster; size up only on observed bottleneck.
+- **"Known issues" section** — neither PLAN.md nor ARCHITECTURE.md currently has a slot for tracking bugs, gotchas, or things-that-don't-quite-work. Add the moment there's actual content (likely a section in PLAN.md alongside *Open questions*, or a callout list in ARCHITECTURE.md). Don't add preemptively — borrowed from a Cline Memory Bank pattern review on 2026-04-27 where the slot was identified as a real gap, but with no content to fill it yet.
 
 ---
 
