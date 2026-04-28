@@ -133,22 +133,6 @@ Land the initial Drizzle schema in two commits. All four ADRs (001/002/003/004) 
 
 ---
 
-## Decisions made since the brief that aren't yet captured in ADRs
-
-These are deliberate choices made during kickoff that diverge from or refine the brief. They should eventually be captured in code, ADRs, or `ARCHITECTURE.md`. Until then, this file is their record.
-
-- **Internal scope name `@disruption-intelligence/*`** instead of `@lima/*`. Rationale: align internal identifiers with the long-term company name. Repo name and root `package.json` name stay Lima-anchored (those are externally-facing product names; internal identifiers track the company).
-- **Local dev DB named `disruption_intelligence`** (not `lima_dev`). Same rationale — internal identifiers track the company.
-- **Local Postgres image: `imresamu/postgis:16-3.5`** instead of official `postgis/postgis:16-3.5`. Rationale: official image lacks arm64 builds; `imresamu/postgis` is a multi-arch mirror by long-time PostGIS contributor Imre Samu, mirroring upstream tags 1:1. Local-dev only; Fly Postgres in production runs amd64 anyway.
-- **pnpm pinned to 10.33.2 with SHA-512 integrity hash** in `packageManager`. Defends against registry compromise and future stricter Corepack versions.
-- **Node 24 LTS** (not 22). Active LTS as of Oct 2025; 22 is now Maintenance.
-- **Fly region: `scl` (Santiago)**. Closest Fly region to Lima.
-- **Postgres-js (`postgres` package) over `pg`** for the Drizzle binding. Drizzle's primary recommendation since 0.30; faster, simpler API. *Pending — applied in Commit A above.*
-- **Git committer identity:** `Kenji Kina <679022+Kenji-K@users.noreply.github.com>` (GitHub noreply form). Set globally to keep the user's real address out of the public git log if/when the repo opens up.
-- **ADR-first ordering.** The brief schedules ADRs 001/002/004 in Weeks 2-3, after the corresponding code lands. We are pulling them forward to Week 1, before the schema migration. Rationale: writing the ADRs first means the schema implements decisions that are written down and defended; writing them after means the ADRs are retroactive justification, which weakens the senior-signal value of the project. The brief's own framing of ADR-003 — *"doing it early forces the data model to be honest"* — is the more rigorous interpretation of all data-model and topology ADRs, not just upsert. The brief's per-ADR specification is detailed enough that nothing speculative is required to write them upfront. Risk: implementation may surface a wrinkle that the ADR didn't anticipate, in which case we add an amendment ADR or a successor with `Status: Supersedes ADR-NNN` — that's normal ADR practice, not a defect. This ordering decision should itself probably become an ADR (or a paragraph in `docs/ARCHITECTURE.md`) once those exist.
-
----
-
 ## Open questions / decisions deferred
 
 - **Two data sources** — not yet picked. Recommended profile: one venue calendar (HTML scrape, polite cron, low legal/blocking risk) and one road-closure or news source. Avoid X/Twitter API (paid, ToS hostile). Decision deferred until Week 1's first scraper is working with one real source.
@@ -165,6 +149,6 @@ After each work session that advances the project, update this file:
 1. Tick milestone checkboxes for items completed
 2. Refresh **Current state** (bump **Last sync point** to the new HEAD, update what's running if it changed)
 3. Rewrite **Next move** to reflect the new pickup point
-4. Add to **Decisions made since the brief** if any non-obvious choice was made
+4. If a non-obvious choice was made that needs cross-session memory, add it to [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) (or write an ADR if it's a major architectural decision)
 
 Don't update for trivial commits (formatting, comment fixes). Do update when a milestone advances or a non-obvious decision is recorded. Keep the file under ~250 lines; if it grows past that, sweep settled decisions into ADRs and stale "open questions" out.

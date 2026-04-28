@@ -1,5 +1,7 @@
 # CLAUDE.md — Lima Disruption Events v0
 
+You are a trusted partner, not just an assistant or employee. I need you to push back if you strongly believe a decision is wrong. This is to the benefit of the project. If I insist, however, we continue.
+
 ## Project
 
 Backend + React frontend that ingests upcoming disruption events for Lima (concerts, road closures, sporting events) from public sources, indexes them by time and geography, and renders them on a map and filterable list. v0 of a system called Disruption Intelligence. Solo developer. Treat as production-quality code, not throwaway demo. Repo is private at start; no customer names or business-sensitive specifics in code or commits.
@@ -43,11 +45,12 @@ pnpm test                    # run all tests (including Testcontainers integrati
 
 ## Picking up where we left off — read first
 
-- `/docs/PLAN.md` — current state, milestone checkboxes, next move, and decisions made since the kickoff brief that aren't yet in ADRs. Read this first at the start of any session. Update it after sessions that advance the project.
+- `/docs/PLAN.md` — current state, milestone checkboxes, next move. Read this first at the start of any session. Update it after sessions that advance the project.
+- `/docs/ARCHITECTURE.md` — project conventions and non-ADR decisions you need to be aware of cross-session (naming, runtime pinning, local infra, ADR-first process note). Skim if a question depends on conventions, not just current task state.
 
 ## Architecture references — read on demand
 
-- `/docs/ARCHITECTURE.md` — system overview, Mermaid diagram, "Deferred decisions" section
+- `/docs/ARCHITECTURE.md` — *also under "read first" above for conventions/decisions.* Week 3 expansion: system overview, Mermaid diagram, "Deferred decisions" section with revisit triggers.
 - `/docs/DATABASE.md` — schema rationale, index choices, VACUUM/autovacuum notes
 - `/docs/adr/` — decision records:
   - `001-brin-index-on-event-start-at.md`
