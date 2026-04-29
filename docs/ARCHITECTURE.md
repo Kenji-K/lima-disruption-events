@@ -73,6 +73,22 @@ Capability flags (`resolveJsonModule`, etc.) get added per-package only when som
 
 Config loads `.env` via Node 24's built-in `process.loadEnvFile()` (no `dotenv` dep) and guards `DATABASE_URL` with an explicit throw so misconfiguration fails fast with a clear message rather than deep inside postgres-js.
 
+### Per-workspace `@types/node` and explicit `compilerOptions.types`
+
+`pnpm` strict isolation does **not** hoist `@types/node` (or any `@types/*` package) into leaf workspaces. Every workspace whose code touches Node globals (`process`, `Buffer`, `fs`, etc.) declares `@types/node` as a direct devDep, and its `tsconfig.json` lists `"types": ["node"]` in `compilerOptions`. The explicit `types` array does two jobs: (1) works around TS 6.0 `@types/*` auto-discovery being unreliable in this monorepo layout (observed silently failing even with the package correctly resolved on disk); (2) prevents transitive `@types/*` deps from quietly injecting globals into packages that shouldn't see them — `apps/web` should not have `process` in scope regardless of what some transitive dep brings in.
+
+When `apps/api` and `apps/web` are scaffolded, repeat the pattern: `apps/api` gets `@types/node` + `"types": ["node"]`; `apps/web` likely gets `"types": ["vite/client"]` (or `[]`) and **no** `@types/node`.
+
+### Schema design rule: don't store time-derivable state
+
+Columns whose value is a function of timestamps and `now()` (e.g., "is this event past?") belong in queries, not the schema. The `events.state` column is **source signal only** — values like `'scheduled'` and `'cancelled'`, set by what the source publishes. Time-based status ("upcoming," "past," "happening now") is derived in queries from `start_at` / `end_at`. Storing time-derived state would require a cron to flip rows, create a race-condition surface around the flip, and risk the schema and the clock disagreeing. Generalises beyond `events`: if a value is `f(timestamps, now())`, it's a view, not a fact.
+
+### Deferred decisions
+
+Decisions explicitly punted on for v0 — listed here so they're not re-litigated. Each entry names the trigger that should prompt revisiting. Week 3 will expand this section with the larger structural deferrals (BullMQ/Redis, multi-region, read replicas).
+
+**PK type for high-volume tables.** v0 uses `serial` integer PKs on both `cities` and `events`. Revisit if any of: (1) a second Postgres instance writes into the same logical schema (multi-region with shared dimensions, not the "different cities, different regions" pattern), (2) a stable customer-visible event identifier needs to be exposed to a third-party system we don't control, (3) the sequence becomes a measured write-rate bottleneck. None are realistic for v0; UUID v7 was considered and rejected on YAGNI grounds. Migration path if a trigger fires: add a `public_id uuid unique` column non-destructively rather than retrofitting the PK type.
+
 ### Git committer identity
 
 Local git commits use `Kenji Kina <679022+Kenji-K@users.noreply.github.com>` (GitHub's noreply form), not the user's real email. Keeps the user's address out of the public git log if/when the repo opens up.

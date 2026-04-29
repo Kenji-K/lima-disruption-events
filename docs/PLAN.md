@@ -81,33 +81,48 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Branch:** `main`. Not yet pushed to `origin` (origin still at `Initial commit`). For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
 
-**Last sync point:** `ddbe90e chore: install TypeScript and Drizzle tooling`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log ddbe90e..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
+**Last sync point:** `8a65b69 chore: approve esbuild build scripts via pnpm allowlist`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log 8a65b69..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
 
 **Local stack running:**
 
 - Node **24.15.0** via fnm; pnpm **10.33.2** pinned via `packageManager` + Corepack (with SHA-512 hash).
 - Docker Compose stack on `:5432` — Postgres **16.10** + PostGIS **3.5.3** on arm64 (`imresamu/postgis:16-3.5`).
 - Local DB: name `disruption_intelligence`, user `disruption_intelligence`, password `disruption_intelligence` (dev-only, in `.env.example`). Connection: `postgres://disruption_intelligence:disruption_intelligence@localhost:5432/disruption_intelligence`.
-- No tables yet (Drizzle schema is the next step).
+- No tables yet (the Drizzle schema's TS files are written but the migration hasn't been generated/applied — see "Uncommitted work" below).
+
+**Uncommitted work in tree** (carry into next session):
+
+- `packages/db/src/schema/_types.ts` — `geographyPoint` customType (Drizzle has no native `geography` column type). `fromDriver` is a stubbed cast with a TODO; reads aren't exercised in v0.
+- `packages/db/src/schema/cities.ts` — small reference table; serial PK, unique slug, geography centroid, IANA timezone.
+- `packages/db/src/schema/events.ts` — full event schema; serial PK, `(sourceId, externalId)` unique index for ADR-003 upserts, two partial composite indexes (`WHERE state = 'scheduled'`) per ADR-001's bitmap-AND story, JSDoc on the non-obvious columns.
+- `packages/db/src/schema/index.ts` — barrel re-exporting both tables.
+
+All of the above type-check under `pnpm -F @disruption-intelligence/db exec tsc --noEmit`. The `@types/node` / `"types": ["node"]` move to `packages/db` shipped separately with this PLAN.md update — see ARCHITECTURE.md "Per-workspace `@types/node`".
 
 ---
 
 ## Next move
 
-Land the initial Drizzle schema. **Commit A is done** (`ddbe90e`) — the workspace now has Node-24-targeted TS config (base `target: ES2024` + strict family; `packages/db` leaf with `module: ESNext` + `moduleResolution: Bundler`), a Drizzle Kit config with `casing: 'snake_case'` / `verbose` / `strict`, and `packages/db` scripts wired to `drizzle-kit {generate,migrate,studio}`. Conventions captured in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) under "TypeScript configuration" and "Drizzle config conventions". The remaining work is Commit B: schema + first migration. All four ADRs (001/002/003/004) are accepted, so the schema implements decisions that are already documented and defended — the migration file should cite ADRs 001 and 002 by number in SQL comments next to the indexes they justify.
+Resume **Commit B**. The schema TS files are written, type-checking, and uncommitted (see "Uncommitted work in tree" above). What's left is migration generation, hand-edits, apply, verify, and commit.
 
-### Commit B — `feat(db): initial schema with cities and events tables`
+### Steps to finish Commit B
 
-- `src/schema/cities.ts` (small reference table; one row at v0 — Lima)
-- `src/schema/events.ts` (with all indexes per ADRs 001/002 plus the partial composites)
-- `src/schema/index.ts` (re-export barrel)
-- Generated migration `migrations/0000_initial_schema.sql`, manually augmented to:
-  - Prepend `CREATE EXTENSION IF NOT EXISTS postgis;`
-  - Add the BRIN index on `start_at` (Drizzle Kit doesn't generate non-btree types — added by hand). Cite ADR-001 in a comment.
-  - Add the GiST index on `location`. Cite ADR-002.
-  - Add the partial composite indexes (`(city_id, state, start_at) WHERE state = 'active'`, `(city_id, category) WHERE state = 'active'`)
-  - Append the Lima seed `INSERT INTO cities ...` with `ST_GeogFromText('SRID=4326;POINT(-77.0428 -12.0464)')`
-- Apply via `pnpm -F db migrate` against the running local DB; verify with `psql \d events` and `\di events*`
+1. **Generate the migration.** From `packages/db`: `pnpm generate`. Produces `migrations/0000_*.sql` plus a snapshot in `migrations/meta/`. **Open the SQL and read it before applying** — Drizzle Kit emits B-tree indexes only, so the partial composites should be present but the BRIN/GiST/`CREATE EXTENSION` are not.
+2. **Hand-edit the generated SQL:**
+   - Prepend `CREATE EXTENSION IF NOT EXISTS postgis;`
+   - Add `CREATE INDEX events_start_at_brin_idx ON events USING BRIN (start_at); -- ADR-001` after `CREATE TABLE events`.
+   - Add `CREATE INDEX events_location_gix ON events USING GIST (location); -- ADR-002`.
+   - Append the Lima seed: `INSERT INTO cities (slug, name, centroid, timezone) VALUES ('lima', 'Lima', ST_GeogFromText('SRID=4326;POINT(-77.0428 -12.0464)'), 'America/Lima') ON CONFLICT (slug) DO NOTHING;`
+3. **Apply.** `pnpm migrate`. Verify with `psql $DATABASE_URL -c '\d events'`, `\di events*` (BRIN, GiST, two partial composites all present), and `SELECT slug, ST_AsText(centroid::geometry), timezone FROM cities;` (returns the Lima row).
+4. **Re-run `pnpm migrate`** — should be a no-op (`No migrations to apply`). Confirms migration tracking works.
+5. **Commit B:** `feat(db): initial schema with cities and events tables`. Stage the schema TS files and the generated migration + meta snapshot. (The `@types/node` / `tsconfig.types` enabling work already shipped — see the wrap-up commit just below the sync point.)
+
+### Schema design choices made this session — see ARCHITECTURE.md for full versions
+
+- **`state` is source signal only** — values `'scheduled'` and `'cancelled'`, set by the source. Time-based status (upcoming, past) is *derived* from `startAt` / `endAt` in queries, never stored. No "past" state, no daily cron to flip rows. Generalises: don't store `f(timestamps, now())` columns.
+- **`serial` PKs on both tables** (UUID v7 considered and rejected on YAGNI grounds; trigger conditions to revisit are listed in ARCHITECTURE.md "Deferred decisions").
+- **`sourcePayload` is the parser intermediate**, not raw HTTP bytes. v0 has no object storage; the column holds the structured object the scraper extracted before normalisation, for debugging when a row looks wrong.
+- **Per-workspace `@types/node` + explicit `compilerOptions.types: ["node"]`** is now a project convention (ARCHITECTURE.md). The fact it had to be wired up live is the reason `packages/db/{package,tsconfig}.json` are part of this commit.
 
 **After Commit B:** stub scraper emitting 3 hardcoded fake events (step 6 in the brief), then wire `node-cron` (step 7), then real scrape replaces the fakes.
 

@@ -102,3 +102,5 @@ Authentication, user accounts, multi-tenant, predictive impact modeling, route-i
 ## Session hygiene
 
 Use `/clear` between major task units (backend → frontend, finishing a feature, starting a new ADR). Keep this file under ~150 lines; if it grows, that's a signal something belongs in ARCHITECTURE.md or an ADR instead.
+
+**Session wrap-up.** When the user asks to "wrap up this session" (or similar phrasing), the goal is a clean cross-session handoff in *docs, not git*. Concretely: update [`docs/PLAN.md`](docs/PLAN.md) per its update protocol (sync point, Current state, Next move, milestone checkboxes); add any cross-session decisions worth carrying forward to [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (or write an ADR if the decision warrants one); flag any uncommitted work explicitly in PLAN.md so the next session knows where the live edits sit. Don't auto-commit — leave that for the user to decide.

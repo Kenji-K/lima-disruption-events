@@ -31,3 +31,6 @@ npm-debug.log*
 
 # Claude Code per-user settings
 .claude/settings.local.json
+
+# Excluding mockup files due to potential image file size
+mockup/
