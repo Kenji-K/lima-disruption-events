@@ -55,6 +55,24 @@ All user-visible UI text is in **Peruvian Spanish**: chrome (buttons, filter chi
 
 `packages/db` uses the `postgres` package (postgres-js driver) for the Drizzle binding, not the older `pg` package. Drizzle's primary recommendation since 0.30 — faster, simpler API, no callback-style holdover.
 
+### TypeScript configuration
+
+**Base (`tsconfig.base.json`)** carries every flag whose absence would silently produce wrong code: `target: ES2024` (the highest stable target Node 24 supports natively, so no downleveling tax), `strict: true`, plus `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `skipLibCheck`, `esModuleInterop`, `forceConsistentCasingInFileNames`, `isolatedModules`. The split rule: *base = correctness/consistency defaults; leaf config = how-this-package-runs.*
+
+**Leaf configs** add only `module`, `moduleResolution`, `include`, and (where relevant) `noEmit`. Per-package: `module: ESNext` + `moduleResolution: Bundler`, even for packages run under `tsx` rather than a true bundler. Reason: `tsx` is esbuild-based and matches Bundler resolution rules; the alternative (`NodeNext`) would force `.js` extensions on every relative TS import for marginal gain.
+
+Capability flags (`resolveJsonModule`, etc.) get added per-package only when something actually needs them. Cost of leaving them off is a clear error message at first use, not silent miscompilation.
+
+### Drizzle config conventions
+
+`packages/db/drizzle.config.ts` sets, beyond the four required fields:
+
+- `casing: 'snake_case'` — TS identifiers stay camelCase; SQL columns are snake_case automatically. Avoids per-column overrides and matches Postgres's unquoted-identifier folding.
+- `verbose: true` + `strict: true` — `generate` prints SQL before writing it; `migrate` prompts before destructive operations.
+- `schema: './src/schema/*.ts'` (glob, not a barrel path) — drizzle-kit walks every top-level schema file, eliminating the silent "forgot to re-export" failure mode where a new table file would otherwise go unnoticed at migration-generation time. The barrel `index.ts` retains its separate role as the package's runtime entry point.
+
+Config loads `.env` via Node 24's built-in `process.loadEnvFile()` (no `dotenv` dep) and guards `DATABASE_URL` with an explicit throw so misconfiguration fails fast with a clear message rather than deep inside postgres-js.
+
 ### Git committer identity
 
 Local git commits use `Kenji Kina <679022+Kenji-K@users.noreply.github.com>` (GitHub's noreply form), not the user's real email. Keeps the user's address out of the public git log if/when the repo opens up.

@@ -81,7 +81,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Branch:** `main`. Not yet pushed to `origin` (origin still at `Initial commit`). For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
 
-**Last sync point:** `ef233d6 docs(adr): 004 — co-locating API and Postgres on Fly's private network`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log ef233d6..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
+**Last sync point:** `ddbe90e chore: install TypeScript and Drizzle tooling`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log ddbe90e..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
 
 **Local stack running:**
 
@@ -94,18 +94,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 ## Next move
 
-Land the initial Drizzle schema in two commits. All four ADRs (001/002/003/004) are written, so the schema implements decisions that are already documented and defended — the migration file should cite ADRs 001 and 002 by number in SQL comments next to the indexes they justify.
-
-### Commit A — `chore: install TypeScript and Drizzle tooling`
-
-- Root devDeps: `typescript`, `@types/node`
-- Root: `tsconfig.base.json` (strict; `noUncheckedIndexedAccess`; `verbatimModuleSyntax`)
-- `packages/db` deps: `drizzle-orm`, `drizzle-kit`, `postgres` (the postgres-js driver; recommended over `pg` since Drizzle 0.30)
-- `packages/db` devDep: `tsx`
-- `packages/db/tsconfig.json` extending base (`module: ESNext`, `moduleResolution: Bundler`)
-- `packages/db/drizzle.config.ts` using Node 24's `process.loadEnvFile()` (no `dotenv` dep needed)
-- `packages/db/src/schema/index.ts` (empty barrel)
-- `packages/db/package.json` scripts: `generate`, `migrate`, `studio`
+Land the initial Drizzle schema. **Commit A is done** (`ddbe90e`) — the workspace now has Node-24-targeted TS config (base `target: ES2024` + strict family; `packages/db` leaf with `module: ESNext` + `moduleResolution: Bundler`), a Drizzle Kit config with `casing: 'snake_case'` / `verbose` / `strict`, and `packages/db` scripts wired to `drizzle-kit {generate,migrate,studio}`. Conventions captured in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) under "TypeScript configuration" and "Drizzle config conventions". The remaining work is Commit B: schema + first migration. All four ADRs (001/002/003/004) are accepted, so the schema implements decisions that are already documented and defended — the migration file should cite ADRs 001 and 002 by number in SQL comments next to the indexes they justify.
 
 ### Commit B — `feat(db): initial schema with cities and events tables`
 
