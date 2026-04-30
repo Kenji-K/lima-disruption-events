@@ -11,7 +11,7 @@ This file is the single source of truth for "what now?". Update it after any com
 When picking up the project in a fresh chat, run through this before doing any new work:
 
 1. **Read this file (`docs/PLAN.md`) and `CLAUDE.md`.** CLAUDE.md is auto-loaded; this file you should re-read in full each session because it changes between sessions.
-2. **Confirm git state matches "Current state" below:** read the **Last sync point** in *Current state*; if `git log <sync-sha>..HEAD` is non-empty, work landed after this file was last synced — read those commits before trusting "Next move."
+2. **Confirm git state matches "Current state" below:** read the **Last sync point** in _Current state_; if `git log <sync-sha>..HEAD` is non-empty, work landed after this file was last synced — read those commits before trusting "Next move."
 3. **Read the "Next move" section below.** That's the immediate task. If it doesn't make sense given the rest of the file, ask the user before proceeding — PLAN.md may have drifted from reality.
 
 If anything in step 2 looks wrong, surface it to the user before changing code. If the local stack isn't responding when you go to run code, the setup is documented in `CLAUDE.md` and `docker-compose.yml` — don't re-derive it from scratch. The kickoff brief that started this project is **one-shot** (not committed in the repo) — do not expect to find it in conversation history. PLAN.md, CLAUDE.md, [`docs/ARCHITECTURE.md`](ARCHITECTURE.md), and the ADRs in [`docs/adr/`](adr/) are the only authoritative project artifacts.
@@ -26,12 +26,12 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 - [x] Node 24 LTS + pnpm 10.33.2 pinned (`.nvmrc`, `engines`, `packageManager` w/ SHA-512)
 - [x] `docker-compose.yml` — Postgres 16 + PostGIS 3.5 (no Redis)
 - [x] **ADR-003** — idempotent upsert via `(source_id, external_id)`
-- [x] **ADR-001** — BRIN index on `event_start_at` *(pulled forward from Week 2; see "ADR-first ordering" below)*
-- [x] **ADR-002** — GiST index on `events.location` geography column *(pulled forward from Week 3)*
-- [x] **ADR-004** — co-locating API + DB on Fly's private network *(pulled forward from Week 3)*
+- [x] **ADR-001** — BRIN index on `event_start_at` _(pulled forward from Week 2; see "ADR-first ordering" below)_
+- [x] **ADR-002** — GiST index on `events.location` geography column _(pulled forward from Week 3)_
+- [x] **ADR-004** — co-locating API + DB on Fly's private network _(pulled forward from Week 3)_
 - [x] Drizzle schema for `cities` + `events` tables; first migration applied locally
-- [ ] One scraper (HTML source, TBD) writing through the idempotent upsert pipeline
-- [ ] Idempotent upsert pipeline with retry + structured logs (pino)
+- [x] Idempotent upsert pipeline with structured logs (pino) _(stub-driven; HTTP-fetch retry lands at the scraper layer with the real source)_
+- [ ] One scraper (HTML source, TBD) writing through the idempotent upsert pipeline _(stub-scraper proves the pipeline shape; real HTML source pending)_
 - [ ] `node-cron` wired in-process; one scheduled job invoking the scraper
 - [ ] Integration tests: scraper happy path, idempotent re-run, schema-validation rejection
 - [ ] **Checkpoint:** `pnpm -F api ingest` runs the scraper on demand, cron runs it on schedule, re-running produces zero duplicates, tests pass
@@ -79,42 +79,53 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 ## Current state
 
-**Branch:** `main`. Not yet pushed to `origin` (origin still at `Initial commit`). For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
+**Branch:** `main`. Local and `origin/main` are in sync at the sync point below. For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
 
-**Last sync point:** `ef47dda feat(db): initial schema with cities and events tables`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log ef47dda..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
+**Last sync point:** `9d47e5a feat(api): stub scraper through idempotent upsert pipeline`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log 9d47e5a..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
 
 **Local stack running:**
 
 - Node **24.15.0** via fnm; pnpm **10.33.2** pinned via `packageManager` + Corepack (with SHA-512 hash).
 - Docker Compose stack on `:5432` — Postgres **16.10** + PostGIS **3.5.3** on arm64 (`imresamu/postgis:16-3.5`). Image's init scripts auto-load PostGIS plus the `tiger` and `topology` schemas into the `disruption_intelligence` DB; the migration's `CREATE EXTENSION IF NOT EXISTS postgis` is therefore a no-op locally but kept in the migration so prod / fresh-clone runs work.
 - Local DB: name `disruption_intelligence`, user `disruption_intelligence`, password `disruption_intelligence` (dev-only, in `.env.example`). Connection: `postgres://disruption_intelligence:disruption_intelligence@localhost:5432/disruption_intelligence`.
-- **Local `.env` required** at the repo root for `pnpm -F @disruption-intelligence/db migrate` / `generate` to run. Gitignored; create with `cp .env.example .env`. Drizzle's config loads it via `process.loadEnvFile('../../.env')` from `packages/db/`.
-- Schema applied: `cities` (1 row — Lima at `POINT(-77.0428 -12.0464)`, `America/Lima`) and `events` (empty, awaiting first scraper). Both tables have all the indexes ADRs 001/002/003 specify. Migration `0000_good_jimmy_woo` is recorded in `drizzle.__drizzle_migrations`; re-running `pnpm migrate` is a verified no-op.
+- **Local `.env` required** at the repo root for `pnpm -F @disruption-intelligence/db migrate` / `generate` to run. Gitignored; create with `cp .env.example .env`. Both `drizzle.config.ts` (kit) and `packages/db/src/client.ts` (runtime) load it via `process.loadEnvFile('../../.env')` from `packages/db/`.
+- Schema applied: `cities` (1 row — Lima at `POINT(-77.0428 -12.0464)`, `America/Lima`) and `events` (3 stub rows from the working ingest pipeline; `external_id ∈ {stub-001, stub-002, stub-003}`). Both tables have all the indexes ADRs 001/002/003 specify. Migrations `0000_good_jimmy_woo` and `0001_purple_mystique` (the latter adds `events.source_url`) are recorded in `drizzle.__drizzle_migrations`; re-running `pnpm migrate` is a verified no-op.
 
-**Uncommitted work in tree:** none. Working tree clean as of `ef47dda`.
+**Workspace structure (post-sync):**
+
+- `packages/db` — public surface via `exports: { ".": "./src/index.ts" }`. Top-level barrel re-exports both the schema barrel (`cities`, `events`) and `client.ts` (`db`, `closeDb`). Runtime Drizzle client mirrors drizzle-kit's `casing: 'snake_case'` — see ARCHITECTURE.md "Drizzle runtime client conventions" for why both sides need the option.
+- `packages/shared` — public surface, exports `scrapedEventSchema`/`ScrapedEvent` (Zod boundary type for scraper output, now including optional `sourceUrl: z.url()`) and `locationSchema`/`Location`. The `endAt > startAt` cross-field refine compares Date instants to handle mixed offsets safely. No string→Date `.transform()` — that conversion belongs in the upsert layer, not the validation boundary.
+- `apps/api` — full ingest pipeline working end-to-end:
+  - `src/ingest/stub-scraper.ts` — three stable-id `ScrapedEvent`s; `stub-003` exercises the null-`endAt` and null-`location` mapper branches.
+  - `src/ingest/upsert.ts` — bulk insert + `.onConflictDoUpdate` keyed on `(sourceId, externalId)` per ADR-003; boundary conversions (ISO→Date, `{lng,lat}`→PostGIS WKT) live here; inserted-vs-updated count via `RETURNING (xmax = 0)`; `cityId` resolved by single `cities.slug = 'lima'` lookup.
+  - `src/ingest/index.ts` — runId-bound child logger, `scrapedEventSchema.array().parse()` (crash on malformed scraper output), single summary log line, `closeDb()` in `finally`.
+  - `pnpm -F api ingest` script wired. Verified two-pass: first run `inserted=3`, second run `inserted=0 updated=3`; `ingested_at` preserved across runs, `updated_at` rolls forward.
+  - Direct deps now include `drizzle-orm` (each workspace declares what it directly imports — see CLAUDE.md/ARCHITECTURE.md on pnpm strict isolation).
+
+**Uncommitted work in tree:** this PLAN.md update + the parallel ARCHITECTURE.md addition (Drizzle runtime client conventions). Both staged for the session-wrap commit. Otherwise tree is clean as of `9d47e5a`.
 
 ---
 
 ## Next move
 
-**Commit C — stub scraper through the idempotent upsert pipeline.** Goal of this commit is to prove the *pipeline shape*, not the data quality: a scraper invocation produces normalized event rows, the upsert path inserts them once and updates them on re-run with zero duplicates, and a structured log line records the outcome. Real HTML scraping replaces the stub in a later commit; the stub is intentionally hardcoded so the pipeline can be exercised before any source-specific brittleness enters the picture.
+**Commit D — integration tests for the ingest pipeline.** Same source files as Commit C; separate commit per the explicit "diff stays reviewable" split. Real Postgres + PostGIS via Testcontainers, no DB mocks (CLAUDE.md non-negotiable: "Real database in tests").
 
-### Suggested shape (mentor mode — confirm before generating files)
+### Scope of Commit D
 
-1. **Pick a home for the upsert path.** Likely `apps/api/src/ingest/` (a new directory inside the not-yet-scaffolded API workspace). Open question: scaffold `apps/api` minimally now (Fastify can come in Week 2; this commit only needs a runnable script + a tsconfig that imports `@disruption-intelligence/db`), or land the ingest module inside `packages/db` for now and lift it once `apps/api` exists. Recommend: scaffold `apps/api` minimally — it's the natural owner of cron + Fastify in Week 1/2 anyway, and the `pnpm -F api ingest` script in `CLAUDE.md` already implies the module lives there.
-2. **Define the boundary type with Zod.** `ScrapedEvent` schema: source-shaped fields the scraper produces (no DB ids, `state` as enum, `location` as `{lng, lat}`, `startAt`/`endAt` as ISO strings or Dates). Validate at the scraper output boundary per the project convention.
-3. **Write the upsert.** One function: `upsertEvents(rows: ScrapedEvent[]): Promise<{inserted: number, updated: number}>`. Uses Drizzle's `.onConflictDoUpdate` keyed on the `events_source_external_uq` index — `(source_id, external_id)` per ADR-003. `updated_at` set to `now()` on every conflict update; `ingested_at` left untouched after first insert.
-4. **Wire the stub scraper.** A function returning 3 hardcoded `ScrapedEvent`s with stable `(source_id='stub', external_id='stub-001'..'stub-003')`. One concert, one road closure, one sports — so `category` filtering has something to bite on later. Coordinates inside Lima.
-5. **`pnpm -F api ingest` script.** Calls scraper → validates → upserts → emits one pino log line per run with `{inserted, updated, durationMs}`.
-6. **Manual verification before commit:** run twice; row count stays at 3, second run shows `inserted: 0, updated: 3` and bumped `updated_at`.
+1. **Vitest + Testcontainers wiring.** `apps/api/vitest.config.ts`; `apps/api/test/setup.ts` that boots a single ephemeral Postgres+PostGIS container per test file, runs migrations against it, and seeds the Lima city row. Container teardown after the file. Use `imresamu/postgis:16-3.5` to match the dev image and avoid arm64 pulls of the official image.
+2. **Three test cases** (one file, e.g. `apps/api/test/ingest/upsert.test.ts`):
+   - **Happy path** — seed 3 valid `ScrapedEvent`s through `upsertEvents`, assert `inserted: 3, updated: 0`, row count = 3, key fields round-trip correctly (especially the PostGIS WKT — verify lng/lat survive via `ST_X(location::geometry)`/`ST_Y(...)`).
+   - **Idempotent re-run** — call `upsertEvents` twice with the same input, assert second call reports `inserted: 0, updated: 3`, `ingested_at` preserved across runs (compare timestamps), `updated_at` strictly greater on second run.
+   - **Zod rejection** — feed a malformed event (e.g. `endAt < startAt`, or missing required field) through `scrapedEventSchema.array().parse()` and assert it throws. This tests the validation contract, not the upsert itself.
+3. **`"scripts": { "test": "vitest run" }`** in `apps/api/package.json`.
 
-Integration tests (Testcontainers) for the upsert + idempotent re-run + Zod-rejection paths come in their own commit immediately after — same source files, separate commit so the diff stays reviewable.
+### Open question for Commit D
 
-### Open scaffolding questions to settle at the start of the next session
+How to share the Testcontainer across test files: one container per file (simple, ~5s startup tax per file), or one shared container per test run with per-test schema reset (faster but more wiring). Default to per-file for v0 — only three test cases, the simplicity wins. Revisit when test count grows past ~10 files.
 
-- Does `apps/api` get scaffolded as part of Commit C, or as a separate `chore:` commit immediately preceding it?
-- Logger lifecycle: a single shared pino instance exported from `apps/api/src/log.ts`, or instantiated per-entrypoint? Lean: shared.
-- The pino request-id middleware (project convention) applies to HTTP requests; for the cron/ingest path, the analogous concept is a per-run `runId` propagated through the log context. Worth setting up now even though there's no Fastify yet.
+### After Commit D
+
+Real HTML scraper (replacing stub) and `node-cron` wiring close out Week 1. The two open questions in PLAN.md ("Two data sources" — pick the first source) gate the real-scraper commit.
 
 ---
 
@@ -124,7 +135,7 @@ Integration tests (Testcontainers) for the upsert + idempotent re-run + Zod-reje
 - **Map tile provider** — MapTiler free tier vs OpenFreeMap. Decision deferred to Week 2.
 - **shadcn/ui or Tailwind-only** — engineer's call if time permits in Week 3.
 - **Postgres machine size on Fly** — start with smallest dev cluster; size up only on observed bottleneck.
-- **"Known issues" section** — neither PLAN.md nor ARCHITECTURE.md currently has a slot for tracking bugs, gotchas, or things-that-don't-quite-work. Add the moment there's actual content (likely a section in PLAN.md alongside *Open questions*, or a callout list in ARCHITECTURE.md). Don't add preemptively — borrowed from a Cline Memory Bank pattern review on 2026-04-27 where the slot was identified as a real gap, but with no content to fill it yet.
+- **"Known issues" section** — neither PLAN.md nor ARCHITECTURE.md currently has a slot for tracking bugs, gotchas, or things-that-don't-quite-work. Add the moment there's actual content (likely a section in PLAN.md alongside _Open questions_, or a callout list in ARCHITECTURE.md). Don't add preemptively — borrowed from a Cline Memory Bank pattern review on 2026-04-27 where the slot was identified as a real gap, but with no content to fill it yet.
 
 ---
 

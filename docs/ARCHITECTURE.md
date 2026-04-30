@@ -73,6 +73,14 @@ Capability flags (`resolveJsonModule`, etc.) get added per-package only when som
 
 Config loads `.env` via Node 24's built-in `process.loadEnvFile('../../.env')` (no `dotenv` dep) and guards `DATABASE_URL` with an explicit throw so misconfiguration fails fast with a clear message rather than deep inside postgres-js. The repo uses a **single root `.env`** (gitignored; copy from `.env.example`) rather than per-workspace env files — one source of truth for shared secrets like `DATABASE_URL`. Other workspaces (e.g. `apps/api` once scaffolded) should load the same root file.
 
+### Drizzle runtime client conventions
+
+`packages/db/src/client.ts` exports `db = drizzle(client, { schema, casing: 'snake_case' })`. The `casing` option is configured **twice** — once in `drizzle.config.ts` (where it tells drizzle-kit how to emit migration column names) and once on the runtime `drizzle()` call (where it tells the running app how to translate TS field names to SQL column names on inserts/selects). The two settings configure independent stages and **must agree**: a missing `casing` on the runtime side leaves Drizzle quoting TS field names literally (`"sourceId"`) in generated SQL, which fails against snake_case columns with `42703 column "sourceId" does not exist`. Any future runtime client (test fixtures, scratch scripts) must mirror the same option.
+
+The same module exports `closeDb()` so short-lived CLI scripts (e.g. `pnpm -F api ingest`) can drain the postgres-js pool and let the event loop exit cleanly. Long-lived processes (the eventual Fastify API) leave the connection open for their lifetime.
+
+The runtime client uses the same root-`.env` loading pattern as `drizzle.config.ts` (`process.loadEnvFile('../../.env')` wrapped in try/catch — the file is absent in production where env vars come from Fly secrets) and the same explicit `DATABASE_URL` throw, so dev and prod fail-modes are identical at boot.
+
 ### Drizzle Kit gotcha: parameterized customType column SQL is quoted
 
 Drizzle Kit emits a column's type by wrapping the string returned from `customType.dataType()` in double quotes. For unparameterized types (`'geography'`) this is harmless because the bare and quoted forms both resolve to the same type. For **parameterized** types like `'geography(Point, 4326)'` it's broken: Postgres parses the quoted form as an identifier (a type *named* `geography(Point, 4326)`), not as `geography` with typmod `(Point, 4326)`, and migration apply fails with `type "geography(Point, 4326)" does not exist`.
