@@ -3,9 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "ingest": "tsx src/ingest/index.ts"
+  },
   "dependencies": {
     "@disruption-intelligence/db": "workspace:*",
     "@disruption-intelligence/shared": "workspace:*",
+    "drizzle-orm": "^0.45.2",
     "pino": "^10.3.1",
     "zod": "^4.4.1"
   },
