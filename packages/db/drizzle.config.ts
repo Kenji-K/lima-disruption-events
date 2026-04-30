@@ -1,7 +1,7 @@
 import { defineConfig } from 'drizzle-kit';
 
 try {
-    process.loadEnvFile();
+    process.loadEnvFile('../../.env');
 } catch {
     // .env is optional - env vars may come from the shell or CI
 }
