@@ -29,7 +29,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 - [x] **ADR-001** — BRIN index on `event_start_at` *(pulled forward from Week 2; see "ADR-first ordering" below)*
 - [x] **ADR-002** — GiST index on `events.location` geography column *(pulled forward from Week 3)*
 - [x] **ADR-004** — co-locating API + DB on Fly's private network *(pulled forward from Week 3)*
-- [ ] Drizzle schema for `cities` + `events` tables; first migration applied locally
+- [x] Drizzle schema for `cities` + `events` tables; first migration applied locally
 - [ ] One scraper (HTML source, TBD) writing through the idempotent upsert pipeline
 - [ ] Idempotent upsert pipeline with retry + structured logs (pino)
 - [ ] `node-cron` wired in-process; one scheduled job invoking the scraper
@@ -81,50 +81,40 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Branch:** `main`. Not yet pushed to `origin` (origin still at `Initial commit`). For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
 
-**Last sync point:** `8a65b69 chore: approve esbuild build scripts via pnpm allowlist`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log 8a65b69..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
+**Last sync point:** `ef47dda feat(db): initial schema with cities and events tables`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log ef47dda..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
 
 **Local stack running:**
 
 - Node **24.15.0** via fnm; pnpm **10.33.2** pinned via `packageManager` + Corepack (with SHA-512 hash).
-- Docker Compose stack on `:5432` — Postgres **16.10** + PostGIS **3.5.3** on arm64 (`imresamu/postgis:16-3.5`).
+- Docker Compose stack on `:5432` — Postgres **16.10** + PostGIS **3.5.3** on arm64 (`imresamu/postgis:16-3.5`). Image's init scripts auto-load PostGIS plus the `tiger` and `topology` schemas into the `disruption_intelligence` DB; the migration's `CREATE EXTENSION IF NOT EXISTS postgis` is therefore a no-op locally but kept in the migration so prod / fresh-clone runs work.
 - Local DB: name `disruption_intelligence`, user `disruption_intelligence`, password `disruption_intelligence` (dev-only, in `.env.example`). Connection: `postgres://disruption_intelligence:disruption_intelligence@localhost:5432/disruption_intelligence`.
-- No tables yet (the Drizzle schema's TS files are written but the migration hasn't been generated/applied — see "Uncommitted work" below).
+- **Local `.env` required** at the repo root for `pnpm -F @disruption-intelligence/db migrate` / `generate` to run. Gitignored; create with `cp .env.example .env`. Drizzle's config loads it via `process.loadEnvFile('../../.env')` from `packages/db/`.
+- Schema applied: `cities` (1 row — Lima at `POINT(-77.0428 -12.0464)`, `America/Lima`) and `events` (empty, awaiting first scraper). Both tables have all the indexes ADRs 001/002/003 specify. Migration `0000_good_jimmy_woo` is recorded in `drizzle.__drizzle_migrations`; re-running `pnpm migrate` is a verified no-op.
 
-**Uncommitted work in tree** (carry into next session):
-
-- `packages/db/src/schema/_types.ts` — `geographyPoint` customType (Drizzle has no native `geography` column type). `fromDriver` is a stubbed cast with a TODO; reads aren't exercised in v0.
-- `packages/db/src/schema/cities.ts` — small reference table; serial PK, unique slug, geography centroid, IANA timezone.
-- `packages/db/src/schema/events.ts` — full event schema; serial PK, `(sourceId, externalId)` unique index for ADR-003 upserts, two partial composite indexes (`WHERE state = 'scheduled'`) per ADR-001's bitmap-AND story, JSDoc on the non-obvious columns.
-- `packages/db/src/schema/index.ts` — barrel re-exporting both tables.
-
-All of the above type-check under `pnpm -F @disruption-intelligence/db exec tsc --noEmit`. The `@types/node` / `"types": ["node"]` move to `packages/db` shipped separately with this PLAN.md update — see ARCHITECTURE.md "Per-workspace `@types/node`".
+**Uncommitted work in tree:** none. Working tree clean as of `ef47dda`.
 
 ---
 
 ## Next move
 
-Resume **Commit B**. The schema TS files are written, type-checking, and uncommitted (see "Uncommitted work in tree" above). What's left is migration generation, hand-edits, apply, verify, and commit.
+**Commit C — stub scraper through the idempotent upsert pipeline.** Goal of this commit is to prove the *pipeline shape*, not the data quality: a scraper invocation produces normalized event rows, the upsert path inserts them once and updates them on re-run with zero duplicates, and a structured log line records the outcome. Real HTML scraping replaces the stub in a later commit; the stub is intentionally hardcoded so the pipeline can be exercised before any source-specific brittleness enters the picture.
 
-### Steps to finish Commit B
+### Suggested shape (mentor mode — confirm before generating files)
 
-1. **Generate the migration.** From `packages/db`: `pnpm generate`. Produces `migrations/0000_*.sql` plus a snapshot in `migrations/meta/`. **Open the SQL and read it before applying** — Drizzle Kit emits B-tree indexes only, so the partial composites should be present but the BRIN/GiST/`CREATE EXTENSION` are not.
-2. **Hand-edit the generated SQL:**
-   - Prepend `CREATE EXTENSION IF NOT EXISTS postgis;`
-   - Add `CREATE INDEX events_start_at_brin_idx ON events USING BRIN (start_at); -- ADR-001` after `CREATE TABLE events`.
-   - Add `CREATE INDEX events_location_gix ON events USING GIST (location); -- ADR-002`.
-   - Append the Lima seed: `INSERT INTO cities (slug, name, centroid, timezone) VALUES ('lima', 'Lima', ST_GeogFromText('SRID=4326;POINT(-77.0428 -12.0464)'), 'America/Lima') ON CONFLICT (slug) DO NOTHING;`
-3. **Apply.** `pnpm migrate`. Verify with `psql $DATABASE_URL -c '\d events'`, `\di events*` (BRIN, GiST, two partial composites all present), and `SELECT slug, ST_AsText(centroid::geometry), timezone FROM cities;` (returns the Lima row).
-4. **Re-run `pnpm migrate`** — should be a no-op (`No migrations to apply`). Confirms migration tracking works.
-5. **Commit B:** `feat(db): initial schema with cities and events tables`. Stage the schema TS files and the generated migration + meta snapshot. (The `@types/node` / `tsconfig.types` enabling work already shipped — see the wrap-up commit just below the sync point.)
+1. **Pick a home for the upsert path.** Likely `apps/api/src/ingest/` (a new directory inside the not-yet-scaffolded API workspace). Open question: scaffold `apps/api` minimally now (Fastify can come in Week 2; this commit only needs a runnable script + a tsconfig that imports `@disruption-intelligence/db`), or land the ingest module inside `packages/db` for now and lift it once `apps/api` exists. Recommend: scaffold `apps/api` minimally — it's the natural owner of cron + Fastify in Week 1/2 anyway, and the `pnpm -F api ingest` script in `CLAUDE.md` already implies the module lives there.
+2. **Define the boundary type with Zod.** `ScrapedEvent` schema: source-shaped fields the scraper produces (no DB ids, `state` as enum, `location` as `{lng, lat}`, `startAt`/`endAt` as ISO strings or Dates). Validate at the scraper output boundary per the project convention.
+3. **Write the upsert.** One function: `upsertEvents(rows: ScrapedEvent[]): Promise<{inserted: number, updated: number}>`. Uses Drizzle's `.onConflictDoUpdate` keyed on the `events_source_external_uq` index — `(source_id, external_id)` per ADR-003. `updated_at` set to `now()` on every conflict update; `ingested_at` left untouched after first insert.
+4. **Wire the stub scraper.** A function returning 3 hardcoded `ScrapedEvent`s with stable `(source_id='stub', external_id='stub-001'..'stub-003')`. One concert, one road closure, one sports — so `category` filtering has something to bite on later. Coordinates inside Lima.
+5. **`pnpm -F api ingest` script.** Calls scraper → validates → upserts → emits one pino log line per run with `{inserted, updated, durationMs}`.
+6. **Manual verification before commit:** run twice; row count stays at 3, second run shows `inserted: 0, updated: 3` and bumped `updated_at`.
 
-### Schema design choices made this session — see ARCHITECTURE.md for full versions
+Integration tests (Testcontainers) for the upsert + idempotent re-run + Zod-rejection paths come in their own commit immediately after — same source files, separate commit so the diff stays reviewable.
 
-- **`state` is source signal only** — values `'scheduled'` and `'cancelled'`, set by the source. Time-based status (upcoming, past) is *derived* from `startAt` / `endAt` in queries, never stored. No "past" state, no daily cron to flip rows. Generalises: don't store `f(timestamps, now())` columns.
-- **`serial` PKs on both tables** (UUID v7 considered and rejected on YAGNI grounds; trigger conditions to revisit are listed in ARCHITECTURE.md "Deferred decisions").
-- **`sourcePayload` is the parser intermediate**, not raw HTTP bytes. v0 has no object storage; the column holds the structured object the scraper extracted before normalisation, for debugging when a row looks wrong.
-- **Per-workspace `@types/node` + explicit `compilerOptions.types: ["node"]`** is now a project convention (ARCHITECTURE.md). The fact it had to be wired up live is the reason `packages/db/{package,tsconfig}.json` are part of this commit.
+### Open scaffolding questions to settle at the start of the next session
 
-**After Commit B:** stub scraper emitting 3 hardcoded fake events (step 6 in the brief), then wire `node-cron` (step 7), then real scrape replaces the fakes.
+- Does `apps/api` get scaffolded as part of Commit C, or as a separate `chore:` commit immediately preceding it?
+- Logger lifecycle: a single shared pino instance exported from `apps/api/src/log.ts`, or instantiated per-entrypoint? Lean: shared.
+- The pino request-id middleware (project convention) applies to HTTP requests; for the cron/ingest path, the analogous concept is a per-run `runId` propagated through the log context. Worth setting up now even though there's no Fastify yet.
 
 ---
 
