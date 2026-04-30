@@ -1,0 +1,1 @@
+export { scrapedEventSchema, type ScrapedEvent } from './scraped-event';
