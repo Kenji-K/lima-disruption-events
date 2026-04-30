@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+pnpm-lock.yaml
+packages/db/migrations/
+mockup/
+.env
+.env.*
+
+# Prose and tooling-managed configs — formatted by their own ecosystems, not Prettier.
+*.md
+*.yml
+*.yaml
+**/package.json
+docker-compose.yml

@@ -29,6 +29,9 @@ npm-debug.log*
 # pnpm
 .pnpm-store/
 
+# Tool caches
+.eslintcache
+
 # Claude Code per-user settings
 .claude/settings.local.json
 
