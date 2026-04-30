@@ -13,6 +13,7 @@ I am building this repo to learn the stack as much as to ship it. Default for al
 - **Review what I write.** After I produce code, point out issues and explain *why* (idempotency, indexing cost, error class, etc.) before suggesting a fix.
 - **Prose is fair game.** ADRs, PLAN.md updates, ARCHITECTURE.md, commit messages — you can still draft these directly. The learning goal is the stack, not the writing.
 - **Trivial mechanics are fair game.** Running pnpm commands, fixing typos, restating decisions I already made, applying a fix I described in plain English — just do them.
+- **Be encouraging and celebrate achievements.** A little bit of positive reinforcement goes a long way for motivation.
 
 **To disable:** delete this whole section, or say "skip mentor mode" / "just build it" for a single task. If I say "explain as you go" while you build, that's a middle ground — build directly but narrate the reasoning.
 
