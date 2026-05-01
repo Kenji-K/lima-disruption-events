@@ -42,7 +42,7 @@ BRIN stores a summary tuple (min, max, has-nulls) for each contiguous group of `
 
 The non-time access paths are served by separate partial composite B-trees on `(city_id, state, start_at) WHERE state = 'active'` and `(city_id, category) WHERE state = 'active'` — defined alongside this index in the initial migration. This ADR is specifically about the time dimension; the partial B-trees handle the city/state/category dimensions and compose well with BRIN at query planning time.
 
-Reference: Postgres 16 BRIN documentation, https://www.postgresql.org/docs/16/brin-intro.html.
+Reference: Postgres 16 BRIN documentation, <https://www.postgresql.org/docs/16/brin-intro.html>.
 
 ## Consequences
 

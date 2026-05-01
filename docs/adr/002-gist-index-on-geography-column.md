@@ -41,7 +41,7 @@ The index supports the operators all four access patterns need:
 
 For a `geography` column the index stores spheroid-aware bounding regions, not planar boxes — that's what `gist_geography_ops_2d` provides. We accept the slightly higher build and query cost of geography over geometry in exchange for correct distance math globally; the alternative is to also maintain a `geometry` column, which doubles storage and risks the two columns drifting.
 
-References: PostGIS docs on spatial indexing, https://postgis.net/docs/using_postgis_dbmanagement.html#idm9402; Postgres 16 GiST docs, https://www.postgresql.org/docs/16/gist-intro.html.
+References: PostGIS docs on spatial indexing, <https://postgis.net/docs/using_postgis_dbmanagement.html#idm9402>; Postgres 16 GiST docs, <https://www.postgresql.org/docs/16/gist-intro.html>.
 
 ## Consequences
 
