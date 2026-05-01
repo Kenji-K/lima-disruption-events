@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "ingest": "tsx src/ingest/index.ts"
+    "ingest": "tsx src/ingest/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@disruption-intelligence/db": "workspace:*",
