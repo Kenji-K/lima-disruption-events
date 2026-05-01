@@ -4,52 +4,59 @@ import { scrapedEventSchema } from '@disruption-intelligence/shared';
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
 import { upsertEvents } from '../../src/ingest/upsert';
 import assert from 'node:assert';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { db, events } from '@disruption-intelligence/db';
 
-const fixtures: ScrapedEvent[] = [
-    {
-        sourceId: 'test',
-        externalId: 'test-001',
-        title: 'Bad Bunny en el Estadio Nacional',
-        category: 'concert',
-        state: 'scheduled',
-        startAt: '2026-06-12T21:00:00-05:00',
-        endAt: '2026-06-13T00:00:00-05:00',
-        location: { lng: -77.0339, lat: -12.0683 },
-        sourcePayload: { venue: 'Estadio Nacional' },
-    },
-    {
-        sourceId: 'test',
-        externalId: 'test-002',
-        title: 'Partido Alianza Lima vs Universitario de Deportes',
-        category: 'sport',
-        state: 'scheduled',
-        startAt: '2026-06-19T18:00:00-05:00',
-        endAt: '2026-06-19T21:00:00-05:00',
-        location: { lng: -77.0441496, lat: -12.0484395 },
-        sourcePayload: { venue: 'Estadio Monumental' },
-    },
-    {
-        sourceId: 'test',
-        externalId: 'test-003',
-        title: 'Mantenimiento de Av. La Mar',
-        category: 'road_closure',
-        state: 'scheduled',
-        startAt: '2026-06-10T21:00:00-05:00',
-        sourcePayload: { affected: 'Av. La Mar, Pueblo Libre' },
-    },
-];
-
 describe('upsertEvents — happy path', () => {
+    const fixtures: ScrapedEvent[] = [
+        {
+            sourceId: 'test',
+            externalId: 'test-001',
+            title: 'Bad Bunny en el Estadio Nacional',
+            category: 'concert',
+            state: 'scheduled',
+            startAt: '2026-06-12T21:00:00-05:00',
+            endAt: '2026-06-13T00:00:00-05:00',
+            location: { lng: -77.0339, lat: -12.0683 },
+            sourcePayload: { venue: 'Estadio Nacional' },
+        },
+        {
+            sourceId: 'test',
+            externalId: 'test-002',
+            title: 'Partido Alianza Lima vs Universitario de Deportes',
+            category: 'sport',
+            state: 'scheduled',
+            startAt: '2026-06-19T18:00:00-05:00',
+            endAt: '2026-06-19T21:00:00-05:00',
+            location: { lng: -77.0441496, lat: -12.0484395 },
+            sourcePayload: { venue: 'Estadio Monumental' },
+        },
+        {
+            sourceId: 'test',
+            externalId: 'test-003',
+            title: 'Mantenimiento de Av. La Mar',
+            category: 'road_closure',
+            state: 'scheduled',
+            startAt: '2026-06-10T21:00:00-05:00',
+            sourcePayload: { affected: 'Av. La Mar, Pueblo Libre' },
+        },
+    ];
+
     let result: Awaited<ReturnType<typeof upsertEvents>>;
 
     beforeAll(async () => {
         result = await upsertEvents(fixtures);
     });
 
-    it('inserts three events with correct counts', () => {
-        expect(result.inserted).toBe(3);
-        expect(result.updated).toBe(0);
+    it('inserts three events with correct counts', async () => {
+        expect(result).toEqual({ inserted: 3, updated: 0 });
+
+        const [countRow] = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(events)
+            .where(eq(events.sourceId, 'test'));
+        assert(countRow);
+        expect(countRow.count).toBe(3);
     });
 
     it('round-trips PostGIS coordinates through geography column', async () => {
@@ -103,6 +110,15 @@ describe('upsertEvents — idempotent re-run', () => {
         },
     ];
 
+    async function timestampsFor(externalId: string) {
+        const [row] = await db
+            .select({ ingestedAt: events.ingestedAt, updatedAt: events.updatedAt })
+            .from(events)
+            .where(eq(events.externalId, externalId));
+        assert(row, `expected ${externalId} to exist`);
+        return row;
+    }
+
     let firstResult: Awaited<ReturnType<typeof upsertEvents>>;
     let secondResult: Awaited<ReturnType<typeof upsertEvents>>;
     let firstIngestedAt: Date;
@@ -112,27 +128,17 @@ describe('upsertEvents — idempotent re-run', () => {
 
     beforeAll(async () => {
         firstResult = await upsertEvents(idempotentFixtures);
-        const [first] = await db
-            .select({ ingestedAt: events.ingestedAt, updatedAt: events.updatedAt })
-            .from(events)
-            .where(eq(events.externalId, 'idempotent-001'));
-        assert(first, 'expected idempotent-001 to exist after first upsert');
-        firstIngestedAt = first.ingestedAt;
-        firstUpdatedAt = first.updatedAt;
+        ({ ingestedAt: firstIngestedAt, updatedAt: firstUpdatedAt } =
+            await timestampsFor('idempotent-001'));
 
         // Postgres now() is transaction-start at microsecond precision; back-to-back
         // transactions can land in the same μs on fast hardware. Small wait keeps
         // the updated_at strict-greater-than assertion non-flaky.
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await sleep(10);
 
         secondResult = await upsertEvents(idempotentFixtures);
-        const [second] = await db
-            .select({ ingestedAt: events.ingestedAt, updatedAt: events.updatedAt })
-            .from(events)
-            .where(eq(events.externalId, 'idempotent-001'));
-        assert(second, 'expected idempotent-001 to exist after second upsert');
-        secondIngestedAt = second.ingestedAt;
-        secondUpdatedAt = second.updatedAt;
+        ({ ingestedAt: secondIngestedAt, updatedAt: secondUpdatedAt } =
+            await timestampsFor('idempotent-001'));
     });
 
     it('reports inserts on first call and updates on second call', () => {
@@ -172,6 +178,6 @@ describe('scrapedEventSchema — rejection', () => {
 
     it('rejects an array containing any invalid element', () => {
         const batch: unknown[] = [validBase, { ...validBase, state: 'pending' }];
-        expect(() => scrapedEventSchema.array().parse(batch)).toThrow();
+        expect(() => scrapedEventSchema.array().parse(batch)).toThrow(/state|enum/i);
     });
 });
