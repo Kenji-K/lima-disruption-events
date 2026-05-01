@@ -81,6 +81,18 @@ The same module exports `closeDb()` so short-lived CLI scripts (e.g. `pnpm -F ap
 
 The runtime client uses the same root-`.env` loading pattern as `drizzle.config.ts` (`process.loadEnvFile('../../.env')` wrapped in try/catch — the file is absent in production where env vars come from Fly secrets) and the same explicit `DATABASE_URL` throw, so dev and prod fail-modes are identical at boot.
 
+### Vitest test harness — top-level await in setup files, not `beforeAll`
+
+Test files statically import `upsertEvents` → `upsert.ts` → `@disruption-intelligence/db` → `client.ts`. That chain runs when the test *module loads*, and `client.ts` reads `DATABASE_URL` at that moment to construct the postgres-js pool. If `DATABASE_URL` isn't set to the test container's URI by then, the singleton binds to whatever the dev `.env` says — and every test silently runs against the dev DB regardless of what `beforeAll` does later.
+
+`apps/api/test/setup.ts` therefore does container start, env mutation, db dynamic-import, and `migrate()` at **top level** (not inside `beforeAll`). Vitest awaits setup-file evaluation before loading test files, so top-level await blocks at exactly the right point. `afterAll` is still safe for teardown — the trap is only on the downhill side. The detection signature for the trap firing is "schema 'drizzle' already exists" NOTICEs from Postgres on what should be a fresh container, plus tests that pass for the wrong reason because data from prior runs is still in the dev DB.
+
+Implication: any future singleton bound to env at module-load time (a logger, a Sentry client, a feature-flag evaluator) needs the same top-level treatment in setup files. If a setup file's body isn't where the env is set, you've already lost.
+
+### Test fixtures live with the test, not in production code
+
+Tests build their own `ScrapedEvent` arrays inline rather than importing `stub-scraper.ts`. The stub is scheduled for replacement when the real HTML scraper lands; coupling tests to a transient artifact would force an unrelated rewrite at swap time and create the temptation to keep the stub around as a "test fixture in production code" pretender. The general rule: a test for `f(input)` depends on `input`'s schema (here `scrapedEventSchema`), not on whoever happens to produce valid `input` in production. Same principle scales to mocked external APIs and seed data.
+
 ### Drizzle Kit gotcha: parameterized customType column SQL is quoted
 
 Drizzle Kit emits a column's type by wrapping the string returned from `customType.dataType()` in double quotes. For unparameterized types (`'geography'`) this is harmless because the bare and quoted forms both resolve to the same type. For **parameterized** types like `'geography(Point, 4326)'` it's broken: Postgres parses the quoted form as an identifier (a type *named* `geography(Point, 4326)`), not as `geography` with typmod `(Point, 4326)`, and migration apply fails with `type "geography(Point, 4326)" does not exist`.

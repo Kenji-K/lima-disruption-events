@@ -33,7 +33,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 - [x] Idempotent upsert pipeline with structured logs (pino) _(stub-driven; HTTP-fetch retry lands at the scraper layer with the real source)_
 - [ ] One scraper (HTML source, TBD) writing through the idempotent upsert pipeline _(stub-scraper proves the pipeline shape; real HTML source pending)_
 - [ ] `node-cron` wired in-process; one scheduled job invoking the scraper
-- [ ] Integration tests: scraper happy path, idempotent re-run, schema-validation rejection
+- [x] Integration tests: scraper happy path, idempotent re-run, schema-validation rejection
 - [ ] **Checkpoint:** `pnpm -F api ingest` runs the scraper on demand, cron runs it on schedule, re-running produces zero duplicates, tests pass
 
 ### Week 2 — API + frontend scaffold (~22h)
@@ -81,7 +81,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Branch:** `main`. Local and `origin/main` are in sync at the sync point below. For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
 
-**Last sync point:** `9d47e5a feat(api): stub scraper through idempotent upsert pipeline`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log 9d47e5a..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
+**Last sync point:** `5143d29 test(api): integration tests for ingest pipeline via testcontainers`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log 5143d29..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
 
 **Local stack running:**
 
@@ -101,31 +101,30 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
   - `src/ingest/index.ts` — runId-bound child logger, `scrapedEventSchema.array().parse()` (crash on malformed scraper output), single summary log line, `closeDb()` in `finally`.
   - `pnpm -F api ingest` script wired. Verified two-pass: first run `inserted=3`, second run `inserted=0 updated=3`; `ingested_at` preserved across runs, `updated_at` rolls forward.
   - Direct deps now include `drizzle-orm` (each workspace declares what it directly imports — see CLAUDE.md/ARCHITECTURE.md on pnpm strict isolation).
+  - `test/setup.ts` + `test/ingest/upsert.test.ts` — Vitest + `@testcontainers/postgresql` harness. Setup spins one PostGIS container per test file at top-level (not `beforeAll`; see ARCHITECTURE.md "Vitest test harness" for the singleton-trap fix). 8 tests across 3 scenarios: happy path (counts + PostGIS round-trip via `ST_X`/`ST_Y`), idempotent re-run (`ingested_at` preserved, `updated_at` advances), Zod rejection (cross-field refine, missing required field, array-element propagation). `pnpm -F api test` runs once; `pnpm -F api test:watch` for iteration. Container boot ~3-5s per file; tests themselves ~270ms.
 
-**Uncommitted work in tree:** this PLAN.md update + the parallel ARCHITECTURE.md addition (Drizzle runtime client conventions). Both staged for the session-wrap commit. Otherwise tree is clean as of `9d47e5a`.
+**Uncommitted work in tree:** this PLAN.md update + the ARCHITECTURE.md additions made this session (Vitest singleton-trap convention, test fixture ownership). Both staged for the session-wrap commit. Otherwise tree is clean as of `5143d29`.
 
 ---
 
 ## Next move
 
-**Commit D — integration tests for the ingest pipeline.** Same source files as Commit C; separate commit per the explicit "diff stays reviewable" split. Real Postgres + PostGIS via Testcontainers, no DB mocks (CLAUDE.md non-negotiable: "Real database in tests").
+**Pick the first real data source, then replace the stub scraper with it.** This is the gate before `node-cron` wiring closes out Week 1's "Backend spine" milestone.
 
-### Scope of Commit D
+### What's blocking
 
-1. **Vitest + Testcontainers wiring.** `apps/api/vitest.config.ts`; `apps/api/test/setup.ts` that boots a single ephemeral Postgres+PostGIS container per test file, runs migrations against it, and seeds the Lima city row. Container teardown after the file. Use `imresamu/postgis:16-3.5` to match the dev image and avoid arm64 pulls of the official image.
-2. **Three test cases** (one file, e.g. `apps/api/test/ingest/upsert.test.ts`):
-   - **Happy path** — seed 3 valid `ScrapedEvent`s through `upsertEvents`, assert `inserted: 3, updated: 0`, row count = 3, key fields round-trip correctly (especially the PostGIS WKT — verify lng/lat survive via `ST_X(location::geometry)`/`ST_Y(...)`).
-   - **Idempotent re-run** — call `upsertEvents` twice with the same input, assert second call reports `inserted: 0, updated: 3`, `ingested_at` preserved across runs (compare timestamps), `updated_at` strictly greater on second run.
-   - **Zod rejection** — feed a malformed event (e.g. `endAt < startAt`, or missing required field) through `scrapedEventSchema.array().parse()` and assert it throws. This tests the validation contract, not the upsert itself.
-3. **`"scripts": { "test": "vitest run" }`** in `apps/api/package.json`.
+The "Two data sources" open question (below). Recommended profile for the first source: a venue calendar (HTML, polite cron, low blocking risk). Avoid X/Twitter (paid + ToS hostile) and anything requiring login. The pick needs to land before code can be written; once picked, the implementation pattern is mostly mechanical.
 
-### Open question for Commit D
+### Scope of the next commit
 
-How to share the Testcontainer across test files: one container per file (simple, ~5s startup tax per file), or one shared container per test run with per-test schema reset (faster but more wiring). Default to per-file for v0 — only three test cases, the simplicity wins. Revisit when test count grows past ~10 files.
+1. **Source-specific scraper** at `apps/api/src/ingest/<source-slug>-scraper.ts` returning `Promise<ScrapedEvent[]>`. HTML parsing via Cheerio or a similar minimal lib (decision deferred to implementation; pick by source's HTML shape). Polite User-Agent header that identifies the project; respect `robots.txt`.
+2. **Wire it into `src/ingest/index.ts`** as the new default scraper. `stub-scraper.ts` can be deleted in the same commit or in a follow-up — call it explicitly so the commit boundary is clear either way.
+3. **HTTP-fetch retry/error handling** lives at the scraper layer (Week 1 milestone notes already call this out). `undici`'s built-in retry options or a thin wrapper; structured failure logs via pino. Operational error class — a transient HTTP failure must not block the next scheduled run.
+4. **No new integration tests required** unless the scraper has unusual logic. The schema contract (`scrapedEventSchema`) is what `upsert.test.ts` already verifies; a scraper that emits valid `ScrapedEvent`s flows through the same pipeline. Add scraper-specific tests if there's parsing logic worth pinning (selectors, date normalisation, etc.) — and keep fixtures self-contained per the convention in ARCHITECTURE.md "Test fixtures live with the test."
 
-### After Commit D
+### After the real scraper
 
-Real HTML scraper (replacing stub) and `node-cron` wiring close out Week 1. The two open questions in PLAN.md ("Two data sources" — pick the first source) gate the real-scraper commit.
+`node-cron` wiring (`apps/api/src/cron.ts` or similar; one scheduled job invoking the new scraper) closes the Week 1 checkpoint: on-demand `pnpm -F api ingest`, scheduled cron, idempotent re-runs, tests pass. Then Week 2 begins (Fastify HTTP API + Vite/React/MapLibre frontend scaffold).
 
 ---
 
