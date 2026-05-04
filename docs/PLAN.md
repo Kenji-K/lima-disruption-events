@@ -31,10 +31,10 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 - [x] **ADR-004** — co-locating API + DB on Fly's private network _(pulled forward from Week 3)_
 - [x] Drizzle schema for `cities` + `events` tables; first migration applied locally
 - [x] Idempotent upsert pipeline with structured logs (pino) _(stub-driven; HTTP-fetch retry lands at the scraper layer with the real source)_
-- [ ] One scraper (HTML source, TBD) writing through the idempotent upsert pipeline _(stub-scraper proves the pipeline shape; real HTML source pending)_
-- [ ] `node-cron` wired in-process; one scheduled job invoking the scraper
+- [x] One scraper (HTML source) writing through the idempotent upsert pipeline _(Gran Teatro Nacional — see [`docs/plans/scraper-1-gran-teatro-nacional.md`](plans/scraper-1-gran-teatro-nacional.md))_
+- [x] `node-cron` wired in-process; one scheduled job invoking the scraper _(daily 06:00 America/Lima; `pnpm -F api cron`)_
 - [x] Integration tests: scraper happy path, idempotent re-run, schema-validation rejection
-- [ ] **Checkpoint:** `pnpm -F api ingest` runs the scraper on demand, cron runs it on schedule, re-running produces zero duplicates, tests pass
+- [x] **Checkpoint:** `pnpm -F api ingest` runs the scraper on demand, cron runs it on schedule, re-running produces zero duplicates, tests pass _(verified end-to-end: 83 events, idempotent re-run inserted=0/updated=83, 18 tests green)_
 
 ### Week 2 — API + frontend scaffold (~22h)
 
@@ -81,7 +81,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Branch:** `main`. Local and `origin/main` are in sync at the sync point below. For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
 
-**Last sync point:** `5143d29 test(api): integration tests for ingest pipeline via testcontainers`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log 5143d29..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
+**Last sync point:** `aca169e chore(api): remove stub-scraper now that real scraper is live`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log aca169e..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
 
 **Local stack running:**
 
@@ -89,48 +89,50 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 - Docker Compose stack on `:5432` — Postgres **16.10** + PostGIS **3.5.3** on arm64 (`imresamu/postgis:16-3.5`). Image's init scripts auto-load PostGIS plus the `tiger` and `topology` schemas into the `disruption_intelligence` DB; the migration's `CREATE EXTENSION IF NOT EXISTS postgis` is therefore a no-op locally but kept in the migration so prod / fresh-clone runs work.
 - Local DB: name `disruption_intelligence`, user `disruption_intelligence`, password `disruption_intelligence` (dev-only, in `.env.example`). Connection: `postgres://disruption_intelligence:disruption_intelligence@localhost:5432/disruption_intelligence`.
 - **Local `.env` required** at the repo root for `pnpm -F @disruption-intelligence/db migrate` / `generate` to run. Gitignored; create with `cp .env.example .env`. Both `drizzle.config.ts` (kit) and `packages/db/src/client.ts` (runtime) load it via `process.loadEnvFile('../../.env')` from `packages/db/`.
-- Schema applied: `cities` (1 row — Lima at `POINT(-77.0428 -12.0464)`, `America/Lima`) and `events` (3 stub rows from the working ingest pipeline; `external_id ∈ {stub-001, stub-002, stub-003}`). Both tables have all the indexes ADRs 001/002/003 specify. Migrations `0000_good_jimmy_woo` and `0001_purple_mystique` (the latter adds `events.source_url`) are recorded in `drizzle.__drizzle_migrations`; re-running `pnpm migrate` is a verified no-op.
+- Schema applied: `cities` (1 row — Lima at `POINT(-77.0428 -12.0464)`, `America/Lima`) and `events` (83 real rows from the live Gran Teatro Nacional scraper; May/Jun/Jul 2026 fetched at the last manual ingest). The events column is `start_at` (not `event_start_at` as earlier copies of this file said). Both tables have all the indexes ADRs 001/002/003 specify. Migrations `0000_good_jimmy_woo` and `0001_purple_mystique` (the latter adds `events.source_url`) are recorded in `drizzle.__drizzle_migrations`; re-running `pnpm migrate` is a verified no-op.
 
 **Workspace structure (post-sync):**
 
 - `packages/db` — public surface via `exports: { ".": "./src/index.ts" }`. Top-level barrel re-exports both the schema barrel (`cities`, `events`) and `client.ts` (`db`, `closeDb`). Runtime Drizzle client mirrors drizzle-kit's `casing: 'snake_case'` — see ARCHITECTURE.md "Drizzle runtime client conventions" for why both sides need the option.
 - `packages/shared` — public surface, exports `scrapedEventSchema`/`ScrapedEvent` (Zod boundary type for scraper output, now including optional `sourceUrl: z.url()`) and `locationSchema`/`Location`. The `endAt > startAt` cross-field refine compares Date instants to handle mixed offsets safely. No string→Date `.transform()` — that conversion belongs in the upsert layer, not the validation boundary.
-- `apps/api` — full ingest pipeline working end-to-end:
-  - `src/ingest/stub-scraper.ts` — three stable-id `ScrapedEvent`s; `stub-003` exercises the null-`endAt` and null-`location` mapper branches.
-  - `src/ingest/upsert.ts` — bulk insert + `.onConflictDoUpdate` keyed on `(sourceId, externalId)` per ADR-003; boundary conversions (ISO→Date, `{lng,lat}`→PostGIS WKT) live here; inserted-vs-updated count via `RETURNING (xmax = 0)`; `cityId` resolved by single `cities.slug = 'lima'` lookup.
-  - `src/ingest/index.ts` — runId-bound child logger, `scrapedEventSchema.array().parse()` (crash on malformed scraper output), single summary log line, `closeDb()` in `finally`.
-  - `pnpm -F api ingest` script wired. Verified two-pass: first run `inserted=3`, second run `inserted=0 updated=3`; `ingested_at` preserved across runs, `updated_at` rolls forward.
-  - Direct deps now include `drizzle-orm` (each workspace declares what it directly imports — see CLAUDE.md/ARCHITECTURE.md on pnpm strict isolation).
-  - `test/setup.ts` + `test/ingest/upsert.test.ts` — Vitest + `@testcontainers/postgresql` harness. Setup spins one PostGIS container per test file at top-level (not `beforeAll`; see ARCHITECTURE.md "Vitest test harness" for the singleton-trap fix). 8 tests across 3 scenarios: happy path (counts + PostGIS round-trip via `ST_X`/`ST_Y`), idempotent re-run (`ingested_at` preserved, `updated_at` advances), Zod rejection (cross-field refine, missing required field, array-element propagation). `pnpm -F api test` runs once; `pnpm -F api test:watch` for iteration. Container boot ~3-5s per file; tests themselves ~270ms.
+- `apps/api` — full ingest pipeline live against a real source:
+  - `src/ingest/gran-teatro-nacional-scraper.ts` — Cheerio parser of `granteatronacional.pe/calendario/YYYYMM` over a 3-month window. Two-phase fetch retry (1+3 in-call attempts, then a single end-of-run pass over the failedList). Three GTN-HTML quirks handled in-line with comments: repeat-cell `<time datetime>` carries the first occurrence's date (combine `td.date-date` + `<time>` time-of-day instead); empty `cat-*` class on uncategorized events falls back to `'proximamente'`; `"¡Es gratis!"` overrides popup text on free events but the `cat-*` class is the source of truth.
+  - `src/ingest/run.ts` — shared `runIngestOnce(log)` used by both the one-off and the cron worker.
+  - `src/ingest/index.ts` — thin shell: `runIngestOnce` wrapped in finally-`closeDb` for `pnpm -F api ingest`.
+  - `src/ingest/upsert.ts` — unchanged from the stub era. Bulk insert + `.onConflictDoUpdate` keyed on `(sourceId, externalId)` per ADR-003; boundary conversions (ISO→Date, `{lng,lat}`→PostGIS WKT); inserted-vs-updated count via `RETURNING (xmax = 0)`; `cityId` resolved by single `cities.slug = 'lima'` lookup.
+  - `src/cron.ts` — `pnpm -F api cron` standalone scheduler. Daily 06:00 `America/Lima` via node-cron 4.x. `noOverlap: true` skips a tick if the previous one is still running. SIGTERM/SIGINT trigger graceful shutdown (stop task, `closeDb`, exit 0). When Fastify lands in Week 2 the schedule attaches to its lifecycle.
+  - Direct deps now include `drizzle-orm`, `cheerio`, `node-cron` (each workspace declares what it directly imports — see CLAUDE.md/ARCHITECTURE.md on pnpm strict isolation).
+  - `test/setup.ts` + `test/ingest/upsert.test.ts` + `test/ingest/gran-teatro-nacional-scraper.test.ts` — 18 tests total. The new scraper test runs purely against a co-located fixture (`test/ingest/fixtures/gran-teatro-nacional-calendario-202605.html`) and does not need Postgres; the pipeline test still uses the Testcontainers harness. `pnpm -F api test` runs once; `pnpm -F api test:watch` for iteration. Total wall-clock ~6–10s including container boot.
 
-**Uncommitted work in tree:** this PLAN.md update + the ARCHITECTURE.md additions made this session (Vitest singleton-trap convention, test fixture ownership). Both staged for the session-wrap commit. Otherwise tree is clean as of `5143d29`.
+**Uncommitted work in tree:** this PLAN.md update + the ARCHITECTURE.md "Scraper conventions" addition + a column-name nit fix in `docs/plans/scraper-1-gran-teatro-nacional.md`. All staged for the session-wrap commit. Otherwise tree is clean as of `aca169e`.
 
 ---
 
 ## Next move
 
-**Pick the first real data source, then replace the stub scraper with it.** This is the gate before `node-cron` wiring closes out Week 1's "Backend spine" milestone.
-
-### What's blocking
-
-The "Two data sources" open question (below). Recommended profile for the first source: a venue calendar (HTML, polite cron, low blocking risk). Avoid X/Twitter (paid + ToS hostile) and anything requiring login. The pick needs to land before code can be written; once picked, the implementation pattern is mostly mechanical.
+**Week 1 is closed. Open Week 2: Fastify HTTP API.** The scraper is live (Gran Teatro Nacional, 83 events for May/Jun/Jul) and the cron is wired (daily 06:00 Lima). The next gate is exposing the data via a Zod-validated HTTP API.
 
 ### Scope of the next commit
 
-1. **Source-specific scraper** at `apps/api/src/ingest/<source-slug>-scraper.ts` returning `Promise<ScrapedEvent[]>`. HTML parsing via Cheerio or a similar minimal lib (decision deferred to implementation; pick by source's HTML shape). Polite User-Agent header that identifies the project; respect `robots.txt`.
-2. **Wire it into `src/ingest/index.ts`** as the new default scraper. `stub-scraper.ts` can be deleted in the same commit or in a follow-up — call it explicitly so the commit boundary is clear either way.
-3. **HTTP-fetch retry/error handling** lives at the scraper layer (Week 1 milestone notes already call this out). `undici`'s built-in retry options or a thin wrapper; structured failure logs via pino. Operational error class — a transient HTTP failure must not block the next scheduled run.
-4. **No new integration tests required** unless the scraper has unusual logic. The schema contract (`scrapedEventSchema`) is what `upsert.test.ts` already verifies; a scraper that emits valid `ScrapedEvent`s flows through the same pipeline. Add scraper-specific tests if there's parsing logic worth pinning (selectors, date normalisation, etc.) — and keep fixtures self-contained per the convention in ARCHITECTURE.md "Test fixtures live with the test."
+1. **Fastify scaffold inside `apps/api`** — Fastify ^5 with `fastify-type-provider-zod` so request/response schemas are Zod-defined and the OpenAPI spec is generated, not hand-written. Decision deferred to implementation: keep the cron as a separate `pnpm -F api cron` entry, or attach it to the Fastify lifecycle now? Cleanest answer is to attach now (one process, one logger); revisit only if the cron and the API ever need to scale independently.
+2. **Three endpoints** to start: `GET /healthz` (returns `{ ok: true }` plus a DB ping), `GET /events` (filtered list — at minimum a `?from=&to=&category=&limit=` shape), `GET /events/:id` (single event, 404 if missing). The list filter should at least cover the time-range BRIN-friendly query so ADR-001 gets exercised against real data.
+3. **OpenAPI exposed at `/docs`** via `@scalar/fastify-api-reference` (or the simpler swagger-ui plugin). The spec is the artifact most worth showing in interviews; auto-generated from the Zod schemas means it can never drift from the implementation.
+4. **No frontend yet.** That's the second half of Week 2; landing it in a separate commit keeps the diffs scannable and lets the API be exercised via curl/HTTPie before the React app is in the loop.
 
-### After the real scraper
+### Open question to resolve before starting Week 2
 
-`node-cron` wiring (`apps/api/src/cron.ts` or similar; one scheduled job invoking the new scraper) closes the Week 1 checkpoint: on-demand `pnpm -F api ingest`, scheduled cron, idempotent re-runs, tests pass. Then Week 2 begins (Fastify HTTP API + Vite/React/MapLibre frontend scaffold).
+**Scraper #2 timing.** Originally Week 2 scheduled "Second scraper plugged into the same pipeline." Two viable choices to surface in a discussion:
+
+- **Land Scraper #2 immediately** (before Fastify) so the pipeline-abstraction claim has two sources behind it before the API ships. Candidate: Teleticket aggregator (covers Estadio Nacional via venue-string match — see [`docs/plans/scraper-1-gran-teatro-nacional.md`](plans/scraper-1-gran-teatro-nacional.md) source-survey conclusions).
+- **Defer Scraper #2 to mid-Week-2** (after Fastify) so the API ships against real data sooner. Risk: the abstraction stays single-call and only gets stress-tested late.
+
+This needs to be picked before code starts. v0's Definition of done says "≥20 real events from ≥2 sources" — so #2 ships by Week 3 either way; only the order is open.
 
 ---
 
 ## Open questions / decisions deferred
 
-- **Two data sources** — not yet picked. Recommended profile: one venue calendar (HTML scrape, polite cron, low legal/blocking risk) and one road-closure or news source. Avoid X/Twitter API (paid, ToS hostile). Decision deferred until Week 1's first scraper is working with one real source.
+- **Scraper #2 source + timing** — see "Next move" above. Source-survey work in [`docs/plans/scraper-1-gran-teatro-nacional.md`](plans/scraper-1-gran-teatro-nacional.md) parked Teleticket (would cover Estadio Nacional via venue-string match) as the leading candidate. Timing: before vs after Fastify.
 - **Map tile provider** — MapTiler free tier vs OpenFreeMap. Decision deferred to Week 2.
 - **shadcn/ui or Tailwind-only** — engineer's call if time permits in Week 3.
 - **Postgres machine size on Fly** — start with smallest dev cluster; size up only on observed bottleneck.

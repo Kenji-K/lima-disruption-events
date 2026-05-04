@@ -121,7 +121,7 @@ Fixture captured at [apps/api/test/ingest/fixtures/gran-teatro-nacional-calendar
 
 **`externalId` strategy:** `<slug>:<YYYY-MM-DDTHH:MM>` — e.g. `aida:2026-05-17T17:00`. Stable across re-runs; immune to same-day multi-show collisions (the trailing `-N` on the cell `id` hints these exist).
 
-**Past/present/future:** ingest all entries unfiltered. The scraper faithfully reproduces what GTN publishes; downstream API/UI handles `event_start_at >= now()` filtering at query time. Lossless capture.
+**Past/present/future:** ingest all entries unfiltered. The scraper faithfully reproduces what GTN publishes; downstream API/UI handles `start_at >= now()` filtering at query time. Lossless capture.
 
 **Maintenance entries (`montaje`, `desmontaje`, `ensayo`):** keep as first-class events with their natural GTN category. Per the v0's "disruption ingestion" framing, "the venue is occupied" is itself a disruption signal worth indexing. No remapping — GTN already classifies them as `cat-montaje` and we preserve that verbatim.
 
@@ -172,7 +172,7 @@ Existing pipeline test [apps/api/test/ingest/upsert.test.ts](../../apps/api/test
 
 1. `pnpm -F api ingest` against local Postgres. Expect: events parsed, `inserted=N`, `updated=0`, `closeDb()` clean shutdown.
 2. `pnpm -F api ingest` again. Expect: `inserted=0`, `updated=N`. ADR-003's idempotency contract holds for the first time against real data.
-3. `psql` (or Drizzle Studio) into `disruption_intelligence`: spot-check 3 random rows for sane `event_start_at`, `category`, `source_url`.
+3. `psql` (or Drizzle Studio) into `disruption_intelligence`: spot-check 3 random rows for sane `start_at`, `category`, `source_url`.
 4. `pnpm -F api test`. Expect: existing 8 tests + the new scraper test all green.
 
 ### Step 6 — Docs
@@ -242,9 +242,9 @@ pnpm -F api ingest
 # expect: inserted=0, updated=N — ingested_at preserved, updated_at advances
 
 # 3. Spot-check the data
-psql "$DATABASE_URL" -c "SELECT title, event_start_at, category, source_url \
+psql "$DATABASE_URL" -c "SELECT title, start_at, category, source_url \
   FROM events WHERE source_id = 'gran-teatro-nacional' \
-  ORDER BY event_start_at LIMIT 5;"
+  ORDER BY start_at LIMIT 5;"
 # expect: realistic concert/theater titles, future dates, valid URLs
 
 # 4. Tests
