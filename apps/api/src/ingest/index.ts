@@ -1,20 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { log } from '../log';
-import { scrapedEventSchema } from '@disruption-intelligence/shared';
-import { granTeatroNacionalScraper } from './gran-teatro-nacional-scraper';
-import { upsertEvents } from './upsert';
 import { closeDb } from '@disruption-intelligence/db';
+import { log } from '../log';
+import { runIngestOnce } from './run';
 
-const runId = randomUUID();
-const runLog = log.child({ runId });
-
-const startedAt = Date.now();
 try {
-    const raw = await granTeatroNacionalScraper(runLog);
-    const validated = scrapedEventSchema.array().parse(raw);
-    const { inserted, updated } = await upsertEvents(validated);
-    const durationMs = Date.now() - startedAt;
-    runLog.info({ inserted, updated, durationMs }, 'ingest run complete');
+    await runIngestOnce(log);
 } finally {
     await closeDb();
 }
