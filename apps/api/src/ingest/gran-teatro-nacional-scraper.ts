@@ -102,6 +102,13 @@ export function parseCalendarHtml(html: string): ScrapedEvent[] {
         });
     });
 
+    if (events.length === 0) {
+        // HTTP 200 + zero matches = programmer error per ARCHITECTURE.md "Scraper conventions";
+        // the scraper is a contract with the upstream HTML and we want loud immediate failure,
+        // not silent under-coverage.
+        throw new Error('parseCalendarHtml: 0 events parsed — GTN markup likely changed');
+    }
+
     return events;
 }
 
@@ -121,7 +128,6 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
     const months = monthsToFetch(new Date(), MONTHS_TO_FETCH);
     const failedList: { url: string; cause?: unknown; status?: number }[] = [];
     const events: ScrapedEvent[] = [];
-    let monthsParsed = 0;
     let droppedAfterRetry = 0;
 
     for (const month of months) {
@@ -132,7 +138,6 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
         if (outcome.ok) {
             const monthEvents = parseCalendarHtml(outcome.html);
             events.push(...monthEvents);
-            monthsParsed++;
             scraperLog.info(
                 { month, eventsParsed: monthEvents.length, durationMs: Date.now() - monthStart },
                 'month fetched',
@@ -154,7 +159,6 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
             const outcome = await fetchMonthHtml(failed.url, scraperLog, []);
             if (outcome.ok) {
                 events.push(...parseCalendarHtml(outcome.html));
-                monthsParsed++;
             } else {
                 droppedAfterRetry++;
                 scraperLog.warn(
@@ -165,19 +169,9 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
         }
     }
 
-    // HTTP 200 across every successfully-fetched month + zero events overall = markup
-    // likely changed. A single empty month is legitimate (theatre on hiatus) so the
-    // check sits at scraper level, not per-month.
-    if (monthsParsed > 0 && events.length === 0) {
-        throw new Error(
-            `granTeatroNacionalScraper: 0 events across ${monthsParsed} successfully-fetched month(s) — GTN markup likely changed`,
-        );
-    }
-
     scraperLog.info(
         {
             monthsAttempted: months.length,
-            monthsParsed,
             eventsParsed: events.length,
             phase1Failed: failedList.length,
             droppedAfterRetry,
