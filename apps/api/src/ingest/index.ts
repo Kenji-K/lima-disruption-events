@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { log } from '../log';
 import { scrapedEventSchema } from '@disruption-intelligence/shared';
-import { stubScraper } from './stub-scraper';
+import { granTeatroNacionalScraper } from './gran-teatro-nacional-scraper';
 import { upsertEvents } from './upsert';
 import { closeDb } from '@disruption-intelligence/db';
 
@@ -10,7 +10,7 @@ const runLog = log.child({ runId });
 
 const startedAt = Date.now();
 try {
-    const raw = await stubScraper();
+    const raw = await granTeatroNacionalScraper(runLog);
     const validated = scrapedEventSchema.array().parse(raw);
     const { inserted, updated } = await upsertEvents(validated);
     const durationMs = Date.now() - startedAt;

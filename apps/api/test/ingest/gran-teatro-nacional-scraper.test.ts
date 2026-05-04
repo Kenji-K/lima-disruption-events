@@ -1,0 +1,81 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { describe, it, expect } from 'vitest';
+import { scrapedEventSchema } from '@disruption-intelligence/shared';
+import { parseCalendarHtml } from '../../src/ingest/gran-teatro-nacional-scraper';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const fixtureHtml = readFileSync(
+    join(__dirname, 'fixtures', 'gran-teatro-nacional-calendario-202605.html'),
+    'utf8',
+);
+
+describe('granTeatroNacionalScraper / parseCalendarHtml', () => {
+    const events = parseCalendarHtml(fixtureHtml);
+
+    it('parses every event-occurrence anchor (25 in May 2026 fixture)', () => {
+        expect(events).toHaveLength(25);
+    });
+
+    it('every event passes scrapedEventSchema', () => {
+        // Throws if any event is malformed — this is the contract test.
+        expect(() => scrapedEventSchema.array().parse(events)).not.toThrow();
+    });
+
+    it('every event has the locked sourceId and scheduled state', () => {
+        for (const e of events) {
+            expect(e.sourceId).toBe('gran-teatro-nacional');
+            expect(e.state).toBe('scheduled');
+        }
+    });
+
+    it('startAt is Lima local time with -05:00 offset (the timezone fix is applied)', () => {
+        for (const e of events) {
+            expect(e.startAt).toMatch(/-05:00$/);
+            expect(e.startAt).not.toMatch(/Z$/);
+        }
+    });
+
+    it('externalId is <slug>:<YYYY-MM-DDTHH:MM>', () => {
+        for (const e of events) {
+            expect(e.externalId).toMatch(/^[a-z0-9-]+:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+        }
+    });
+
+    it('externalIds are unique within a fetched month', () => {
+        const ids = events.map((e) => e.externalId);
+        expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it('sourceUrl points at the canonical /evento/<slug>', () => {
+        for (const e of events) {
+            expect(e.sourceUrl).toMatch(/^https:\/\/granteatronacional\.pe\/evento\/[a-z0-9-]+$/);
+        }
+    });
+
+    it('preserves GTN categories verbatim, with proximamente fallback for uncategorized', () => {
+        const categories = new Set(events.map((e) => e.category));
+        // From the May 2026 fixture: cat-folclore, cat-montaje, cat-musica, plus events
+        // with no cat-* class (popup label "Próximamente") which fall back to 'proximamente'.
+        expect(categories).toEqual(new Set(['folclore', 'montaje', 'musica', 'proximamente']));
+    });
+
+    it('includes maintenance entries (montaje) — disruption-ingestion lossless capture', () => {
+        const montaje = events.filter((e) => e.category === 'montaje');
+        expect(montaje.length).toBeGreaterThan(0);
+    });
+
+    it('captures AIDA 2026-05-17 17:00 as a known concrete event', () => {
+        const aida = events.find((e) => e.externalId === 'aida:2026-05-17T17:00');
+        expect(aida).toBeDefined();
+        expect(aida).toMatchObject({
+            sourceId: 'gran-teatro-nacional',
+            title: 'AIDA',
+            category: 'musica',
+            state: 'scheduled',
+            startAt: '2026-05-17T17:00:00-05:00',
+            sourceUrl: 'https://granteatronacional.pe/evento/aida',
+        });
+    });
+});
