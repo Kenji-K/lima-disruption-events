@@ -11,7 +11,6 @@ const USER_AGENT = 'disruption-intelligence/0.1';
 const REQUEST_TIMEOUT_MS = 10_000;
 // 1 initial attempt + N retries; this array's length = N. Phase 1 default → 4 total attempts.
 const PHASE_1_RETRY_BACKOFFS_MS = [250, 500, 1000];
-const PHASE_2_RETRY_BACKOFFS_MS: number[] = []; // 1 attempt, no retries.
 const MONTHS_TO_FETCH = 3;
 
 type FetchOutcome =
@@ -103,11 +102,6 @@ export function parseCalendarHtml(html: string): ScrapedEvent[] {
         });
     });
 
-    if (events.length === 0) {
-        // HTTP 200 + zero matches = programmer error, abort run.
-        throw new Error('parseCalendarHtml: 0 events parsed — GTN markup likely changed');
-    }
-
     return events;
 }
 
@@ -127,9 +121,9 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
     const months = monthsToFetch(new Date(), MONTHS_TO_FETCH);
     const failedList: { url: string; cause?: unknown; status?: number }[] = [];
     const events: ScrapedEvent[] = [];
+    let monthsParsed = 0;
     let droppedAfterRetry = 0;
 
-    // Phase 1 — per-month fetch with in-call retries.
     for (const month of months) {
         const url = `${BASE_URL}/calendario/${month}`;
         const monthStart = Date.now();
@@ -138,6 +132,7 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
         if (outcome.ok) {
             const monthEvents = parseCalendarHtml(outcome.html);
             events.push(...monthEvents);
+            monthsParsed++;
             scraperLog.info(
                 { month, eventsParsed: monthEvents.length, durationMs: Date.now() - monthStart },
                 'month fetched',
@@ -148,31 +143,41 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
             failedList.push({ url, cause: outcome.cause, status: outcome.status });
             scraperLog.warn(
                 { url, status: outcome.status, cause: outcome.cause },
-                'transient failure — queued for phase 2',
+                'transient failure — queued for retry pass',
             );
         }
     }
 
-    // Phase 2 — one more pass over the failedList, single attempt per URL.
     if (failedList.length > 0) {
-        scraperLog.info({ count: failedList.length }, 'phase 2 retry pass');
+        scraperLog.info({ count: failedList.length }, 'retry pass');
         for (const failed of failedList) {
-            const outcome = await fetchMonthHtml(failed.url, scraperLog, PHASE_2_RETRY_BACKOFFS_MS);
+            const outcome = await fetchMonthHtml(failed.url, scraperLog, []);
             if (outcome.ok) {
                 events.push(...parseCalendarHtml(outcome.html));
+                monthsParsed++;
             } else {
                 droppedAfterRetry++;
                 scraperLog.warn(
                     { url: failed.url, finalOutcome: outcome },
-                    'phase 2 retry failed — dropping',
+                    'retry failed — dropping',
                 );
             }
         }
     }
 
+    // HTTP 200 across every successfully-fetched month + zero events overall = markup
+    // likely changed. A single empty month is legitimate (theatre on hiatus) so the
+    // check sits at scraper level, not per-month.
+    if (monthsParsed > 0 && events.length === 0) {
+        throw new Error(
+            `granTeatroNacionalScraper: 0 events across ${monthsParsed} successfully-fetched month(s) — GTN markup likely changed`,
+        );
+    }
+
     scraperLog.info(
         {
             monthsAttempted: months.length,
+            monthsParsed,
             eventsParsed: events.length,
             phase1Failed: failedList.length,
             droppedAfterRetry,

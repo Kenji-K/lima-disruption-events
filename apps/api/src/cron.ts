@@ -1,4 +1,5 @@
 import { schedule } from 'node-cron';
+import { ZodError } from 'zod';
 import { closeDb } from '@disruption-intelligence/db';
 import { log } from './log';
 import { runIngestOnce } from './ingest/run';
@@ -16,9 +17,12 @@ const task = schedule(
         try {
             await runIngestOnce(tickLog);
         } catch (err) {
-            // Operational error reaching here = scrape pipeline failure that wasn't
-            // caught in the per-month classifier. Log loudly; do not crash the worker.
-            tickLog.error({ err }, 'ingest tick failed');
+            // ZodError = scraper output failed boundary validation, i.e. our code is
+            // wrong (programmer error). Anything else = operational (network, DB, GTN
+            // markup change). Both log loudly; neither crashes the worker — daily
+            // cadence means a missed tick recovers tomorrow.
+            const errClass = err instanceof ZodError ? 'programmer' : 'operational';
+            tickLog.error({ err, errClass }, 'ingest tick failed');
         }
     },
     {
@@ -34,9 +38,16 @@ log.info({ schedule: SCHEDULE, timezone: TIMEZONE, name: task.name }, 'cron star
 
 async function shutdown(signal: string): Promise<void> {
     log.info({ signal }, 'cron shutting down');
-    await task.stop();
-    await closeDb();
-    process.exit(0);
+    let exitCode = 0;
+    try {
+        await task.stop();
+        await closeDb();
+    } catch (err) {
+        log.error({ err }, 'cron shutdown error');
+        exitCode = 1;
+    } finally {
+        process.exit(exitCode);
+    }
 }
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
