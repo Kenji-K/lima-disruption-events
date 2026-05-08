@@ -15,6 +15,12 @@ process.env.DATABASE_URL = container.getConnectionUri();
 const { db, closeDb } = await import('@disruption-intelligence/db');
 await migrate(db, { migrationsFolder });
 
+// Seed the 24 non-Lima Peru level-1 regions on top of the migration's Lima row.
+// Top-level await per the same singleton-trap reasoning as migrate() above —
+// any test importing region data needs the seed already applied.
+const { seed } = await import('@disruption-intelligence/db/seed');
+await seed(db);
+
 afterAll(async () => {
     await closeDb();
     await container.stop();

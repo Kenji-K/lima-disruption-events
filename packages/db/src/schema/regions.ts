@@ -1,5 +1,15 @@
-import { pgTable, serial, text, char, smallint, integer, unique, check } from 'drizzle-orm/pg-core';
-import { sql, type AnyPgColumn } from 'drizzle-orm';
+import {
+    pgTable,
+    serial,
+    text,
+    char,
+    smallint,
+    integer,
+    unique,
+    check,
+    type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { geographyPoint } from './_types';
 
 /** Geographic admin regions, modelled as a generic hierarchy across countries.
