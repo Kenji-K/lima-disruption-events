@@ -10,7 +10,7 @@ import {
     index,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { cities } from './cities';
+import { regions } from './regions';
 import { geographyPoint } from './_types';
 
 export const eventState = pgEnum('event_state', ['scheduled', 'cancelled']);
@@ -24,15 +24,17 @@ export const events = pgTable(
     'events',
     {
         id: serial().primaryKey(),
-        /** Identifier of the scraper that produced this row (e.g. 'municipalidad', 'teleticket').
+        /** Identifier of the scraper that produced this row (e.g. 'gran-teatro-nacional', 'futbolperuano').
          *  Paired with externalId for the idempotent upsert key — see ADR-003. */
         sourceId: text().notNull(),
         /** Source's own stable identifier for this event (URL slug, ticket-system ID, etc.).
          *  Paired with sourceId for the idempotent upsert key — see ADR-003. */
         externalId: text().notNull(),
-        cityId: integer()
+        /** FK to the most-specific known region (level 1, 2, or 3 per ADR-005's regions hierarchy).
+         *  Always non-null — every event lives in a known place. */
+        regionId: integer()
             .notNull()
-            .references(() => cities.id),
+            .references(() => regions.id),
         title: text().notNull(),
         /** Open set of categories ('concert', 'sport', 'road_closure', ...). Canonical list lives
          *  in the API/Zod layer, not the DB — sources reveal new categories over time. */
@@ -61,11 +63,11 @@ export const events = pgTable(
     },
     (t) => [
         uniqueIndex('events_source_external_uq').on(t.sourceId, t.externalId),
-        index('events_city_state_start_idx')
-            .on(t.cityId, t.state, t.startAt)
+        index('events_region_state_start_idx')
+            .on(t.regionId, t.state, t.startAt)
             .where(sql`${t.state} = 'scheduled'`),
-        index('events_city_category_idx')
-            .on(t.cityId, t.category)
+        index('events_region_category_idx')
+            .on(t.regionId, t.category)
             .where(sql`${t.state} = 'scheduled'`),
     ],
 );

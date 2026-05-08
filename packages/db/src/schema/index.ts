@@ -1,2 +1,2 @@
-export * from './cities';
+export * from './regions';
 export * from './events';
