@@ -34,6 +34,7 @@ pnpm -F db generate          # generate Drizzle migration from schema diff
 pnpm -F db migrate           # apply migrations to local DB
 pnpm -F db seed              # idempotent reference-data seed
 pnpm test                    # run all tests (including Testcontainers integration tests)
+pnpm typecheck               # tsc --noEmit across all workspaces (tsx/vitest don't type-check)
 ```
 
 ## Operating mode — long-run autonomy

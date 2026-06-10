@@ -130,6 +130,20 @@ Tier-1 acceptance (fresh-context verifier again): live public URL serving events
 
 ---
 
+## Known issues / review backlog
+
+Source: 5-lens architectural review, 2026-06-10 (fresh-context subagents + verified findings). The pre-deploy batch landed same day (error sanitization, int4 id cap, rate limit + trustProxy, healthz timeout, GTN empty-month + futbolperuano all-away rules, cancel-missing sweep, in-batch dedupe, sourceUrl http(s) guard, vercel.json, prod-strict `VITE_API_URL`, `pnpm typecheck`). Deliberately deferred, in priority order:
+
+1. **ADR-006 (deploy topology) — write at top of Tier-1 deploy session.** Must cover: verify PostGIS on the chosen Fly Postgres flavor FIRST (stock postgres-flex lacks it); single-machine/no-autostop constraint (in-process cron double-ticks on 2 machines, never fires under autostop); `release_command` migration runner (tsx/drizzle-kit are devDeps — prod image needs a programmatic `drizzle-orm` migrator script); supersedes ADR-004's "migrations via fly proxy" line.
+2. **ADR-007 (source registry + ingest state) — write before the MML scraper.** MML needs a persistent `?after=` cursor, Lima Expresa a seen-URL set; nowhere to put them today. Include per-source freshness/failure tracking and the news `externalId`/canonical-URL convention (Tier-2 dedup input).
+3. **ADR staleness:** ADR-003 describes columns/state enum that never shipped and says state isn't touched on conflict (it is, correctly); ADR-002 says location is mandatory (nullable by design). Reconcile via amendment ADR. V1-BRIEF "What exists today" is stale since Tier 0 closed.
+4. **`/events` from/to filter on `start_at` only** — a multi-day closure starting before `from` is invisible. Wrong for Tier-1/2 road sources; decide overlap semantics (`start_at <= to AND (end_at IS NULL OR end_at >= from)`) before the frontend bakes current behavior in.
+5. **Region resolution hard-codes Lima** in `upsertEvents`; `ScrapedEvent` can't express a region, and `regionId` is excluded from the conflict set-list so re-scrapes won't fix stamped rows — needs a backfill plan when the first non-Lima source lands (ADR-first).
+6. **Partial indexes** (`regionId, state='scheduled'`) serve no current API query; likely resolution is the API defaulting to `state='scheduled'` + region/bbox filters — revisit with the map query shape.
+7. **Demo polish (web):** filter dropdowns derive options from filtered results (one-way trap); no `staleTime`/`keepPreviousData` (list+marker flash on filter change); default view leads with past events; MapLibre control strings are English (es-PE violation — pass `locale` to the Map); easeTo effect re-fires on refetch.
+8. **Test debt:** vitest unit/integration split (parser tests boot pointless containers — do when scraper #3 lands); `fetchWithRetry`/orchestration resilience untested (make fetch layer injectable before copying the pattern to 6 sources); no web tests; healthz 503 untested.
+9. **Smaller:** futbolperuano conditional GETs (politeness-plan deviation — re-fetches all detail pages each run); robots.txt verification only recorded in a commit message, not the plan doc; `LOG_LEVEL` outside env schema; `@types/node@^25` vs Node 24 pin; stale `@types/node-cron`; `fromDriver` EWKB cast is a typed lie (fix before Tier-2 geospatial reads); `schedule.ts` ZodError classification is dead code (classification belongs in `run.ts`); `ingest/index.ts` is a side-effectful module name; per-source counts in the run summary; no `Cache-Control` on `/events`; 500-row limit ceiling with silent truncation.
+
 ## Open questions / decisions deferred
 
 - **Map tile provider** — RESOLVED 2026-06-10 (v1 re-scope): default OpenFreeMap (no key, no account); swap to MapTiler only if the user supplies a key. Recorded in V1-BRIEF Tier 0.
