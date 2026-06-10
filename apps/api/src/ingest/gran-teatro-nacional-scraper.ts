@@ -1,60 +1,11 @@
-import { setTimeout as sleep } from 'node:timers/promises';
 import * as cheerio from 'cheerio';
 import type { Logger } from 'pino';
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
+import { fetchWithRetry } from './fetch';
 
 const SOURCE_ID = 'gran-teatro-nacional';
 const BASE_URL = 'https://granteatronacional.pe';
-// Polite UA identifies the project. Add a contact suffix (public alias or repo URL)
-// once the repo is public — never a personal email.
-const USER_AGENT = 'disruption-intelligence/0.1';
-const REQUEST_TIMEOUT_MS = 10_000;
-// 1 initial attempt + N retries; this array's length = N. Phase 1 default → 4 total attempts.
-const PHASE_1_RETRY_BACKOFFS_MS = [250, 500, 1000];
 const MONTHS_TO_FETCH = 3;
-
-type FetchOutcome =
-    | { ok: true; html: string }
-    | { ok: false; reason: 'http-4xx'; status: number }
-    | { ok: false; reason: 'transient'; status?: number; cause?: unknown };
-
-async function fetchMonthHtml(
-    url: string,
-    log: Logger,
-    retryBackoffsMs: number[] = PHASE_1_RETRY_BACKOFFS_MS,
-): Promise<FetchOutcome> {
-    let lastTransient: { status?: number; cause?: unknown } = {};
-    const totalAttempts = 1 + retryBackoffsMs.length;
-
-    for (let attempt = 0; attempt < totalAttempts; attempt++) {
-        if (attempt > 0) {
-            await sleep(retryBackoffsMs[attempt - 1]);
-        }
-
-        try {
-            const res = await fetch(url, {
-                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-                headers: { 'User-Agent': USER_AGENT },
-            });
-
-            if (res.ok) {
-                return { ok: true, html: await res.text() };
-            }
-            if (res.status >= 400 && res.status < 500) {
-                return { ok: false, reason: 'http-4xx', status: res.status };
-            }
-            // 5xx — operational, retryable.
-            lastTransient = { status: res.status };
-            log.debug({ url, attempt, status: res.status }, 'http 5xx, will retry');
-        } catch (cause) {
-            // Network error, abort, timeout — all transient.
-            lastTransient = { cause };
-            log.debug({ url, attempt, cause }, 'fetch threw, will retry');
-        }
-    }
-
-    return { ok: false, reason: 'transient', ...lastTransient };
-}
 
 export function parseCalendarHtml(html: string): ScrapedEvent[] {
     const $ = cheerio.load(html);
@@ -133,7 +84,7 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
     for (const month of months) {
         const url = `${BASE_URL}/calendario/${month}`;
         const monthStart = Date.now();
-        const outcome = await fetchMonthHtml(url, scraperLog);
+        const outcome = await fetchWithRetry(url, scraperLog);
 
         if (outcome.ok) {
             const monthEvents = parseCalendarHtml(outcome.html);
@@ -156,7 +107,7 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
     if (failedList.length > 0) {
         scraperLog.info({ count: failedList.length }, 'retry pass');
         for (const failed of failedList) {
-            const outcome = await fetchMonthHtml(failed.url, scraperLog, []);
+            const outcome = await fetchWithRetry(failed.url, scraperLog, []);
             if (outcome.ok) {
                 events.push(...parseCalendarHtml(outcome.html));
             } else {
