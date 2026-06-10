@@ -1,6 +1,8 @@
-# PLAN — Lima Disruption Events v0
+# PLAN — Lima Disruption Events
 
 Persistent project state. **Read this first** when picking up the project in a new session — it tracks where work left off, what's running locally, and any non-obvious decisions made since the original kickoff brief.
+
+> **v1 build sprint (2026-06-10 → 2026-06-22).** Mentor mode is retired; the project is in full-speed build mode. The authoritative scope is [`docs/V1-BRIEF.md`](V1-BRIEF.md) (four tiers: close out v0 → deploy + v0.5 sources → v1 sources → stretch). The Week 1–3 milestones below remain valid as Tier-0/Tier-1 detail; the brief governs everything beyond them.
 
 This file is the single source of truth for "what now?". Update it after any commit that advances a milestone, changes local state, or records a decision that diverges from or refines the brief.
 
@@ -10,7 +12,7 @@ This file is the single source of truth for "what now?". Update it after any com
 
 When picking up the project in a fresh chat, run through this before doing any new work:
 
-1. **Read this file (`docs/PLAN.md`) and `CLAUDE.md`.** CLAUDE.md is auto-loaded; this file you should re-read in full each session because it changes between sessions.
+1. **Read this file (`docs/PLAN.md`), `CLAUDE.md`, and [`docs/V1-BRIEF.md`](V1-BRIEF.md).** CLAUDE.md is auto-loaded; this file and the brief you should re-read each session — this file changes between sessions, the brief is the sprint's scope fence.
 2. **Confirm git state matches "Current state" below:** read the **Last sync point** in _Current state_; if `git log <sync-sha>..HEAD` is non-empty, work landed after this file was last synced — read those commits before trusting "Next move."
 3. **Read the "Next move" section below.** That's the immediate task. If it doesn't make sense given the rest of the file, ask the user before proceeding — PLAN.md may have drifted from reality.
 
@@ -81,7 +83,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Branch:** `main`. Local and `origin/main` are in sync at the sync point below. For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
 
-**Last sync point:** `dc1f626 feat(db): add seed script + 24 Peru level-1 regions`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log dc1f626..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
+**Last sync point:** `c76633b docs: record regions/seed session wrap-up + data conventions`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log c76633b..HEAD` shows commits other than the v1 re-scope commit (this PLAN.md update + V1-BRIEF.md + CLAUDE.md rewrite), work has landed since the last sync — read those commits before trusting "Next move."
 
 **Local stack running:**
 
@@ -105,32 +107,26 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
   - Direct deps now include `drizzle-orm`, `cheerio`, `node-cron` (each workspace declares what it directly imports — see CLAUDE.md/ARCHITECTURE.md on pnpm strict isolation).
   - `test/setup.ts` — top-level await on `migrate()` then `seed()` so test files load against a Testcontainers DB pre-populated with all 25 regions. `test/ingest/upsert.test.ts` + `test/ingest/gran-teatro-nacional-scraper.test.ts` — 18 tests total. The scraper test runs purely against a co-located fixture and does not need Postgres; the pipeline test uses the Testcontainers harness. `pnpm -F api test` runs once; `pnpm -F api test:watch` for iteration. Total wall-clock ~6–10s including container boot.
 
-**Uncommitted work in tree:** this PLAN.md update + the ARCHITECTURE.md additions for the migration-vs-seed split convention + the hand-authored-migration pattern + the reference-data-provenance convention. All staged for the session-wrap commit. Two test fixtures untracked at `apps/api/test/ingest/fixtures/futbolperuano-*.html` — they belong with the upcoming Scraper #2 implementation commit (#4 in the scraper-2 plan), so deliberately not in any wrap-up commit. Otherwise tree is clean as of `dc1f626`.
+**Uncommitted work in tree:** the v1 re-scope set — this PLAN.md update, the new [`docs/V1-BRIEF.md`](V1-BRIEF.md), and the CLAUDE.md build-mode rewrite — shipped as a single re-scope commit. Two test fixtures untracked at `apps/api/test/ingest/fixtures/futbolperuano-*.html` — they belong with the Scraper #2 implementation commit (#4 in the scraper-2 plan), so deliberately not in any wrap-up commit. Otherwise tree is clean as of `c76633b`.
 
 ---
 
 ## Next move
 
-**Scraper #2 was decided before Fastify** (the open question that previously sat in this section). Source-survey work landed in Notion ([Bitácora — Scraper #2](https://www.notion.so/35803c87ab7081f4960fde3c9753c6c5)); ADR-005 + the schema-rename migration + the seed script all landed this session (commits `9fe7636` → `dc1f626`). The remaining Scraper #2 work is two commits per [`docs/plans/scraper-2-futbolperuano.md`](plans/scraper-2-futbolperuano.md):
-
-### Scope of the next two commits
+**Sprint Session 1 = Tier 0 of [`docs/V1-BRIEF.md`](V1-BRIEF.md): close out v0 locally.** Four items, in order:
 
 1. **`refactor(api): extract fetchWithRetry to shared helper`** — lift the two-phase retry wrapper out of `gran-teatro-nacional-scraper.ts` into `apps/api/src/ingest/fetch.ts`. ARCHITECTURE.md "Scraper conventions" already flagged this for when scraper #2 lands. GTN imports the shared helper; existing GTN scraper test should pass without changes.
-2. **`feat(api): real scraper for futbolperuano.com Liga 1 (Universitario, Alianza Lima, Sporting Cristal)`** — `apps/api/src/ingest/futbolperuano-scraper.ts` + `futbolperuano-venues.ts` + integration glue in `run.ts` + a new fixture-driven parser test. JSON-LD extraction from each match's detail page (the SportsEvent block lives inside `Review.itemReviewed`); home-team filter via URL slug; static venue→region map (all three target stadiums resolve to Lima level-1). Two test fixtures already saved untracked at `apps/api/test/ingest/fixtures/futbolperuano-*.html`.
+2. **`feat(api): real scraper for futbolperuano.com Liga 1 (Universitario, Alianza Lima, Sporting Cristal)`** — per [`docs/plans/scraper-2-futbolperuano.md`](plans/scraper-2-futbolperuano.md): `futbolperuano-scraper.ts` + `futbolperuano-venues.ts` + integration glue in `run.ts` + a fixture-driven parser test. JSON-LD extraction from each match's detail page (the SportsEvent block lives inside `Review.itemReviewed`); home-team filter via URL slug; static venue→region fallback map (all three target stadiums resolve to Lima level-1). Two test fixtures already saved untracked at `apps/api/test/ingest/fixtures/futbolperuano-*.html`.
+3. **Fastify API** — scaffold + `GET /healthz`, `GET /events` (filtered list), `GET /events/:id`; OpenAPI auto-generated from Zod at `/docs`; cron attached to the Fastify lifecycle (decision: attach now — one process, one logger; revisit only if cron and API need to scale independently).
+4. **Frontend** — Vite + React + Tailwind + MapLibre + TanStack Query + react-router; map with markers + filterable list + event detail drawer; UI text in es-PE; OpenFreeMap tiles by default.
 
-After these land, "≥20 real events from ≥2 sources" (v0 Definition of Done) is satisfied and the pipeline-abstraction claim has two genuinely contrasting sources behind it (HTML/Cheerio vs JSON-LD). Then Week 2 opens Fastify proper.
-
-### What comes after Scraper #2 (queued, not next)
-
-- **Fastify scaffold + three endpoints + OpenAPI at `/docs`** — original Week 2 plan, see Open questions below for the cron-attachment decision (lean: attach to Fastify lifecycle when it lands).
-- **Frontend (Vite + React + Tailwind + MapLibre + TanStack Query)** — second half of Week 2.
+Tier-0 acceptance (verify with a fresh-context subagent before calling the session done): ≥20 real events from 2 sources on the local map, 0-duplicate re-ingest, all tests green, OpenAPI accurate at `/docs`. Then Tier 1 (deploy + v0.5 sources) — note the brief's "Human prerequisites" checklist gates the deploy step.
 
 ---
 
 ## Open questions / decisions deferred
 
-- **Scraper #2 source + timing** — see "Next move" above. Source-survey work in [`docs/plans/scraper-1-gran-teatro-nacional.md`](plans/scraper-1-gran-teatro-nacional.md) parked Teleticket (would cover Estadio Nacional via venue-string match) as the leading candidate. Timing: before vs after Fastify.
-- **Map tile provider** — MapTiler free tier vs OpenFreeMap. Decision deferred to Week 2.
+- **Map tile provider** — RESOLVED 2026-06-10 (v1 re-scope): default OpenFreeMap (no key, no account); swap to MapTiler only if the user supplies a key. Recorded in V1-BRIEF Tier 0.
 - **shadcn/ui or Tailwind-only** — engineer's call if time permits in Week 3.
 - **Postgres machine size on Fly** — start with smallest dev cluster; size up only on observed bottleneck.
 - **"Known issues" section** — neither PLAN.md nor ARCHITECTURE.md currently has a slot for tracking bugs, gotchas, or things-that-don't-quite-work. Add the moment there's actual content (likely a section in PLAN.md alongside _Open questions_, or a callout list in ARCHITECTURE.md). Don't add preemptively — borrowed from a Cline Memory Bank pattern review on 2026-04-27 where the slot was identified as a real gap, but with no content to fill it yet.

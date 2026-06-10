@@ -1,25 +1,14 @@
-# CLAUDE.md — Lima Disruption Events v0
+# CLAUDE.md — Lima Disruption Events (v1 build sprint)
 
 You are a trusted partner, not just an assistant or employee. I need you to push back if you strongly believe a decision is wrong. This is to the benefit of the project. If I insist, however, we continue.
 
-## Mentor mode (default ON)
+## Build mode (mentor mode retired 2026-06-10)
 
-I am building this repo to learn the stack as much as to ship it. Default for all implementation work: **guide me to build it myself, don't build it for me.**
+This repo started as a learn-the-stack project with a "guide me, don't build for me" mentor mode. That mode is **over**. Build directly, at full speed, to production quality. Don't teach, don't ask Socratic questions, don't wait for me to type the code. If a piece of reasoning is genuinely non-obvious (an index choice, an error-classification call), one or two sentences of narration in passing is welcome — but the deliverable is working, tested code.
 
-- **Teach the concept before the code.** When something is new (Drizzle schema, PostGIS operator class, Fastify plugin lifecycle, Zod refinement, Testcontainers fixture, etc.), explain the underlying idea first. Briefly. Then point me at what to write.
-- **Prompts over edits.** Prefer "try writing the schema for X — here's what to consider" over producing the file. Ask Socratic questions when a decision has tradeoffs I should reason through.
-- **Hints before answers.** When I'm stuck, escalate gradually: nudge → narrower hint → worked example → full answer. Don't jump to the full answer.
-- **Snippets, not files.** Show small focused excerpts as illustrations. I type the real code. If you must show a larger block, mark it clearly as reference and not for copy-paste.
-- **Review what I write.** After I produce code, point out issues and explain *why* (idempotency, indexing cost, error class, etc.) before suggesting a fix.
-- **Prose is fair game.** ADRs, PLAN.md updates, ARCHITECTURE.md, commit messages — you can still draft these directly. The learning goal is the stack, not the writing.
-- **Trivial mechanics are fair game.** Running pnpm commands, fixing typos, restating decisions I already made, applying a fix I described in plain English — just do them.
-- **Be encouraging and celebrate achievements.** A little bit of positive reinforcement goes a long way for motivation.
+## Mission
 
-**To disable:** delete this whole section, or say "skip mentor mode" / "just build it" for a single task. If I say "explain as you go" while you build, that's a middle ground — build directly but narrate the reasoning.
-
-## Project
-
-Backend + React frontend that ingests upcoming disruption events for Lima (concerts, road closures, sporting events) from public sources, indexes them by time and geography, and renders them on a map and filterable list. v0 of a system called Disruption Intelligence. Solo developer. Treat as production-quality code, not throwaway demo. Repo is private at start; no customer names or business-sensitive specifics in code or commits.
+Ship the **v1 data platform** of Disruption Intelligence: ingest Lima disruption events (concerts, matches, road closures, official road alerts) from the full v1 source roadmap, expose them via API + map frontend, deployed and live. The build spec is **`docs/V1-BRIEF.md`** — read it at the start of every session, alongside `docs/PLAN.md` for current state. Hard context: the sprint window closes 2026-06-22; the output is demoed to fleet-operator prospects.
 
 ## Stack
 
@@ -43,14 +32,22 @@ pnpm -F web dev              # run frontend in watch mode
 pnpm -F api ingest           # run scrapers once on demand
 pnpm -F db generate          # generate Drizzle migration from schema diff
 pnpm -F db migrate           # apply migrations to local DB
+pnpm -F db seed              # idempotent reference-data seed
 pnpm test                    # run all tests (including Testcontainers integration tests)
 ```
 
+## Operating mode — long-run autonomy
+
+- **Act when you have enough information.** Don't re-derive established facts, re-litigate decided questions, or survey options you won't pursue. When weighing a choice, pick one and note why in a sentence.
+- **Pause only when the work genuinely requires me:** a destructive or irreversible action, a real scope change (see the fence below), or input only I can provide (credentials, accounts, legal steps). If blocked on one item, take the next unblocked item from the brief instead of ending the turn. Never end a turn on a promise of work not yet done.
+- **Ground every progress claim in a tool result from this session.** If tests fail, say so with the output. If something is unverified, say so. No hedged "should work".
+- **Verify with fresh eyes.** Before checking off a brief milestone, have a fresh-context subagent verify it against `docs/V1-BRIEF.md`'s acceptance criteria. Self-review is not verification.
+- **Don't gold-plate.** No features, abstractions, or defensive handling beyond what the task requires. Validate at system boundaries (scraper output, HTTP, env); trust internal code. Simplest thing that works well.
+- **Session end:** run the PLAN.md update protocol (sync point, current state, next move, checkboxes).
+
 ## ADR Workflow
 
-- **ADRs precede implementation.** Write the ADR for a non-trivial decision before writing the code that implements it — not after, as retroactive justification.
-- **Numerical order matters.** Always write ADRs in the exact numerical order specified in the brief before implementing related code/schema changes.
-- **Confirm before starting.** Confirm ADR ordering against the project brief before starting any implementation step.
+- **ADRs precede implementation.** Write the ADR for a non-trivial decision before the code that implements it — not after, as retroactive justification. New ADRs number sequentially from 006.
 - **Immutable in spirit.** Revise via a successor ADR (`Status: Supersedes ADR-NNN`), don't edit accepted ones.
 - **One ADR per commit.** Message format: `docs(adr): NNN — slug`.
 
@@ -64,44 +61,36 @@ pnpm test                    # run all tests (including Testcontainers integrati
 - **Errors classified.** Operational (retryable) vs. programmer (bug, surface immediately) vs. external (4xx vs 5xx).
 - **Config via env, validated at boot.** Zod-validated env schema; refuse to start with bad config rather than crashing mid-flight.
 - **Retries on scrape jobs.** Exponential backoff, max-attempts cap, structured failure logs. A failed scrape must not block the next scheduled run.
-- **ADRs.** See `## ADR Workflow` above for the full ruleset (ordering, immutability, commit format).
+- **Scraper conventions.** ARCHITECTURE.md "Scraper conventions" applies in full to every new source (error classes, two-layer retry, fixtures-first parser tests, polite UA, robots.txt check, structured logs).
+- **Politeness/ToS rules** in `docs/V1-BRIEF.md` "Operating constraints" are hard rules, not guidance.
 
-## Picking up where we left off — read first
+## Read first, every session
 
-- `/docs/PLAN.md` — current state, milestone checkboxes, next move. Read this first at the start of any session. Update it after sessions that advance the project.
-- `/docs/ARCHITECTURE.md` — project conventions and non-ADR decisions you need to be aware of cross-session (naming, runtime pinning, local infra, ADR-first process note). Skim if a question depends on conventions, not just current task state.
+1. `docs/PLAN.md` — current state, next move. Re-read in full; it changes between sessions.
+2. `docs/V1-BRIEF.md` — the build spec and scope fence for this sprint.
+3. `docs/ARCHITECTURE.md` — cross-session conventions (naming, TS config, Drizzle patterns, scraper conventions). Skim when a question depends on conventions.
 
-## Architecture references — read on demand
+## References — read on demand
 
-- `/docs/ARCHITECTURE.md` — *also under "read first" above for conventions/decisions.* Week 3 expansion: system overview, Mermaid diagram, "Deferred decisions" section with revisit triggers. Also home to **"Product positioning"** — the v0's relationship to the broader Notion business plan.
-- `/docs/DATABASE.md` — schema rationale, index choices, VACUUM/autovacuum notes
-- `/docs/adr/` — decision records:
-  - `001-brin-index-on-event-start-at.md`
-  - `002-gist-index-on-geography-column.md`
-  - `003-idempotent-upsert-via-source-external-id.md`
-  - `004-co-locating-api-and-db-on-fly-private-network.md`
-- **Notion business plan** — [Disruption Intelligence — Plan de Startup](https://www.notion.so/34b03c87ab7081498ebdc8ed77cc7311). Full strategic plan in Spanish (Brújula = Vision/Mission/Tesis/Mapa Mental/Founder Principles; Hoja de Ruta por Etapas = 6-stage roadmap; Aulet 24-step framework across 6 themes; risk register). The v0 in this repo is the **disruption-ingestion tier** of the broader B2B product the plan describes. Read on demand for customer / positioning / strategy / fundraising questions; not needed for the v0 build itself.
+- `/docs/DATABASE.md` — schema rationale, index choices (Week-3 artifact; may not exist yet)
+- `/docs/adr/` — 001 BRIN on start_at · 002 GiST on location · 003 idempotent upsert · 004 Fly 6PN co-location · 005 regions hierarchy
+- **Notion business plan** — [Disruption Intelligence — Plan de Startup](https://www.notion.so/34b03c87ab7081498ebdc8ed77cc7311). Strategy/customer/positioning context only; `docs/V1-BRIEF.md` already distills everything the build needs.
 
-## File Location Conventions
+## Out of scope — do not build
 
-- Before creating any new persistent docs (MEMORY.md, ARCHITECTURE.md, reference files, etc.), confirm the intended location (project root vs. user-level ~/.claude vs. docs/) with the user.
-- Cross-reference existing docs (PLAN.md, ADRs, Notion business plan) before adding new ones to avoid duplication.
-
-## Out of scope for v0 — do not build
-
-Authentication, user accounts, multi-tenant, predictive impact modeling, route-impact analysis, anomaly detection, SLA alerts, email digests, customer-facing briefs, admin UI, payments, multiple cities, ML/LLM features. If any of these start feeling necessary, surface to the user before writing code.
+The full fence lives in `docs/V1-BRIEF.md` "Out of scope". Headline items: MVBP business wrapper, auth/accounts/multi-tenant, payments, predictive impact modeling, ML/LLM features, driver app, FMS integrations, admin UI, multiple cities. Tier 3 (route-awareness) needs an explicit go from me first. If something on the fence starts feeling necessary, stop and surface it.
 
 ## Ask the user before
 
 - Deviating from the locked stack
-- Adding any feature in the "out of scope" list
-- Skipping or postponing one of the four ADRs
-- Pushing the deploy past week 3
-- Picking a third data source
+- Building anything in the out-of-scope fence (including starting Tier 3)
 - Editing a checked-in migration
+- Exposing scraped third-party data anywhere customer-facing (ToS constraints — see brief)
+- Creating external accounts or anything that spends money
+- Destructive operations against the production DB
 
 ## Session hygiene
 
-Use `/clear` between major task units (backend → frontend, finishing a feature, starting a new ADR). Keep this file under ~150 lines; if it grows, that's a signal something belongs in ARCHITECTURE.md or an ADR instead.
+Use `/clear` between tiers or major task units. Keep this file under ~150 lines; if it grows, that's a signal something belongs in ARCHITECTURE.md or an ADR instead. New persistent docs default to `docs/`; cross-reference PLAN.md/ADRs/brief before adding new ones to avoid duplication.
 
-**Session wrap-up.** When the user asks to "wrap up this session" (or similar phrasing), the goal is a clean cross-session handoff in *docs, not git*. Concretely: update [`docs/PLAN.md`](docs/PLAN.md) per its update protocol (sync point, Current state, Next move, milestone checkboxes); add any cross-session decisions worth carrying forward to [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (or write an ADR if the decision warrants one); flag any uncommitted work explicitly in PLAN.md so the next session knows where the live edits sit. Don't auto-commit — leave that for the user to decide. Once they approve, the standard pattern is a single `docs: record [unit] wrap-up + [decisions]` commit covering PLAN.md and any ARCHITECTURE.md / ADR additions made this session — see PLAN.md "Update protocol" step 5 for the canonical version.
+**Session wrap-up.** When asked to "wrap up this session" (or at the natural end of a `/goal` run): update [`docs/PLAN.md`](docs/PLAN.md) per its update protocol; record cross-session decisions in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (or an ADR); flag uncommitted work in PLAN.md. Ship docs updates as a single `docs: record [unit] wrap-up + [decisions]` commit. During the sprint, committing code as work completes is expected — granular conventional-commit messages, no end-of-session mega-commits.
