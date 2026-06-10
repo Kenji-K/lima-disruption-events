@@ -6,6 +6,9 @@ import { fetchWithRetry } from './fetch';
 const SOURCE_ID = 'gran-teatro-nacional';
 const BASE_URL = 'https://granteatronacional.pe';
 const MONTHS_TO_FETCH = 3;
+// Single fixed venue: Gran Teatro Nacional, Av. Javier Prado Este 2225, San Borja.
+// OSM way 151308524, verified via Nominatim 2026-06-10.
+const VENUE_LOCATION = { lng: -77.003169, lat: -12.0866312 };
 
 export function parseCalendarHtml(html: string): ScrapedEvent[] {
     const $ = cheerio.load(html);
@@ -48,6 +51,7 @@ export function parseCalendarHtml(html: string): ScrapedEvent[] {
             category,
             state: 'scheduled',
             startAt,
+            location: VENUE_LOCATION,
             sourceUrl: `${BASE_URL}/evento/${slug}`,
             sourcePayload: { slug, gtnRawCellDatetime: cellDatetimeAttr, date },
         });

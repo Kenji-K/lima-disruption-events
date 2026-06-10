@@ -48,6 +48,12 @@ describe('granTeatroNacionalScraper / parseCalendarHtml', () => {
         expect(new Set(ids).size).toBe(ids.length);
     });
 
+    it('pins every event to the fixed GTN venue point (San Borja)', () => {
+        for (const e of events) {
+            expect(e.location).toEqual({ lng: -77.003169, lat: -12.0866312 });
+        }
+    });
+
     it('sourceUrl points at the canonical /evento/<slug>', () => {
         for (const e of events) {
             expect(e.sourceUrl).toMatch(/^https:\/\/granteatronacional\.pe\/evento\/[a-z0-9-]+$/);
