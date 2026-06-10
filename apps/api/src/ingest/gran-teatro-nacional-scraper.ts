@@ -1,11 +1,15 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import * as cheerio from 'cheerio';
 import type { Logger } from 'pino';
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
 import { fetchWithRetry } from './fetch';
+import type { ScrapeResult } from './types';
 
 const SOURCE_ID = 'gran-teatro-nacional';
 const BASE_URL = 'https://granteatronacional.pe';
 const MONTHS_TO_FETCH = 3;
+// ≥1–2s between requests per host (V1-BRIEF operating constraints).
+const REQUEST_SPACING_MS = 1500;
 // Single fixed venue: Gran Teatro Nacional, Av. Javier Prado Este 2225, San Borja.
 // OSM way 151308524, verified via Nominatim 2026-06-10.
 const VENUE_LOCATION = { lng: -77.003169, lat: -12.0866312 };
@@ -58,10 +62,16 @@ export function parseCalendarHtml(html: string): ScrapedEvent[] {
     });
 
     if (events.length === 0) {
-        // HTTP 200 + zero matches = programmer error per ARCHITECTURE.md "Scraper conventions";
-        // the scraper is a contract with the upstream HTML and we want loud immediate failure,
-        // not silent under-coverage.
-        throw new Error('parseCalendarHtml: 0 events parsed — GTN markup likely changed');
+        // Empty-vs-broken distinction: GTN serves unpublished months as HTTP 200
+        // with a fully rendered calendar grid and zero event anchors (verified live
+        // against /calendario/202702). Grid present + no anchors = legitimately
+        // empty month; no grid at all = markup change, fail loud.
+        if ($('td[date-date]').length === 0) {
+            throw new Error(
+                'parseCalendarHtml: no calendar grid found — GTN markup likely changed',
+            );
+        }
+        return [];
     }
 
     return events;
@@ -78,14 +88,19 @@ function monthsToFetch(now: Date, count: number): string[] {
     return months;
 }
 
-export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEvent[]> {
+export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapeResult> {
     const scraperLog = log.child({ source: SOURCE_ID });
-    const months = monthsToFetch(new Date(), MONTHS_TO_FETCH);
+    const now = new Date();
+    const months = monthsToFetch(now, MONTHS_TO_FETCH);
+    // First instant after the last fetched month — the exclusive sweep boundary.
+    const windowEnd = new Date(now.getFullYear(), now.getMonth() + MONTHS_TO_FETCH, 1);
     const failedList: { url: string; cause?: unknown; status?: number }[] = [];
     const events: ScrapedEvent[] = [];
+    let skipped4xx = 0;
     let droppedAfterRetry = 0;
 
-    for (const month of months) {
+    for (const [i, month] of months.entries()) {
+        if (i > 0) await sleep(REQUEST_SPACING_MS);
         const url = `${BASE_URL}/calendario/${month}`;
         const monthStart = Date.now();
         const outcome = await fetchWithRetry(url, scraperLog);
@@ -93,11 +108,18 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
         if (outcome.ok) {
             const monthEvents = parseCalendarHtml(outcome.html);
             events.push(...monthEvents);
+            if (monthEvents.length === 0) {
+                scraperLog.warn(
+                    { month },
+                    'month grid rendered with no events (unpublished month?)',
+                );
+            }
             scraperLog.info(
                 { month, eventsParsed: monthEvents.length, durationMs: Date.now() - monthStart },
                 'month fetched',
             );
         } else if (outcome.reason === 'http-4xx') {
+            skipped4xx++;
             scraperLog.warn({ url, status: outcome.status }, '4xx — skipping month');
         } else {
             failedList.push({ url, cause: outcome.cause, status: outcome.status });
@@ -111,6 +133,7 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
     if (failedList.length > 0) {
         scraperLog.info({ count: failedList.length }, 'retry pass');
         for (const failed of failedList) {
+            await sleep(REQUEST_SPACING_MS);
             const outcome = await fetchWithRetry(failed.url, scraperLog, []);
             if (outcome.ok) {
                 events.push(...parseCalendarHtml(outcome.html));
@@ -129,9 +152,13 @@ export async function granTeatroNacionalScraper(log: Logger): Promise<ScrapedEve
             monthsAttempted: months.length,
             eventsParsed: events.length,
             phase1Failed: failedList.length,
+            skipped4xx,
             droppedAfterRetry,
         },
         'scrape complete',
     );
-    return events;
+    // The cancel-missing sweep only runs on full window coverage: a dropped or
+    // 4xx-skipped month means absence from `events` proves nothing.
+    const complete = skipped4xx === 0 && droppedAfterRetry === 0;
+    return { events, sweepWindowEnd: complete ? windowEnd : null };
 }

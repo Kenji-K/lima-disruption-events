@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { scrapedEventSchema } from '@disruption-intelligence/shared';
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
 import { upsertEvents } from '../../src/ingest/upsert';
+import { cancelMissingEvents } from '../../src/ingest/sweep';
 import assert from 'node:assert';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { db, events } from '@disruption-intelligence/db';
@@ -155,6 +156,174 @@ describe('upsertEvents — idempotent re-run', () => {
     });
 });
 
+describe('upsertEvents — field propagation on conflict', () => {
+    it('propagates every changed field through ON CONFLICT (set-list regression guard)', async () => {
+        const base: ScrapedEvent = {
+            sourceId: 'propagation',
+            externalId: 'prop-001',
+            title: 'Original',
+            category: 'concert',
+            state: 'scheduled',
+            startAt: '2026-08-01T20:00:00-05:00',
+            sourcePayload: { v: 1 },
+        };
+        await upsertEvents([base]);
+
+        const changed: ScrapedEvent = {
+            ...base,
+            title: 'Renamed',
+            category: 'futbol',
+            state: 'cancelled',
+            startAt: '2026-08-02T21:00:00-05:00',
+            endAt: '2026-08-02T23:00:00-05:00',
+            location: { lng: -77.01, lat: -12.05 },
+            sourcePayload: { v: 2 },
+            sourceUrl: 'https://example.com/prop',
+        };
+        const result = await upsertEvents([changed]);
+        expect(result).toEqual({ inserted: 0, updated: 1 });
+
+        const [row] = await db
+            .select({
+                title: events.title,
+                category: events.category,
+                state: events.state,
+                startAt: events.startAt,
+                endAt: events.endAt,
+                lng: sql<number | null>`ST_X(${events.location}::geometry)`,
+                lat: sql<number | null>`ST_Y(${events.location}::geometry)`,
+                sourcePayload: events.sourcePayload,
+                sourceUrl: events.sourceUrl,
+            })
+            .from(events)
+            .where(eq(events.externalId, 'prop-001'));
+        assert(row, 'expected prop-001 to exist');
+
+        expect(row.title).toBe('Renamed');
+        expect(row.category).toBe('futbol');
+        expect(row.state).toBe('cancelled');
+        expect(row.startAt.toISOString()).toBe('2026-08-03T02:00:00.000Z');
+        expect(row.endAt?.toISOString()).toBe('2026-08-03T04:00:00.000Z');
+        expect(row.lng).toBeCloseTo(-77.01, 4);
+        expect(row.lat).toBeCloseTo(-12.05, 4);
+        expect(row.sourcePayload).toEqual({ v: 2 });
+        expect(row.sourceUrl).toBe('https://example.com/prop');
+    });
+});
+
+describe('upsertEvents — in-batch duplicate keys', () => {
+    it('dedupes duplicates within one batch instead of aborting the statement (last wins)', async () => {
+        const first: ScrapedEvent = {
+            sourceId: 'dup',
+            externalId: 'dup-001',
+            title: 'First occurrence',
+            category: 'concert',
+            state: 'scheduled',
+            startAt: '2026-09-01T20:00:00-05:00',
+            sourcePayload: {},
+        };
+        const second: ScrapedEvent = { ...first, title: 'Second occurrence' };
+
+        const result = await upsertEvents([first, second]);
+        expect(result).toEqual({ inserted: 1, updated: 0 });
+
+        const [row] = await db
+            .select({ title: events.title })
+            .from(events)
+            .where(eq(events.externalId, 'dup-001'));
+        assert(row);
+        expect(row.title).toBe('Second occurrence');
+    });
+});
+
+describe('cancelMissingEvents — marker sweep', () => {
+    // Today is fixed by the DB's now(); these fixtures straddle it: one past row
+    // (never swept), three future rows inside the window, one beyond the window.
+    const sweepFixtures: ScrapedEvent[] = [
+        {
+            sourceId: 'sweep',
+            externalId: 'sweep-past',
+            title: 'Ya ocurrió',
+            category: 'concert',
+            state: 'scheduled',
+            startAt: '2020-01-01T20:00:00-05:00',
+            sourcePayload: {},
+        },
+        {
+            sourceId: 'sweep',
+            externalId: 'sweep-seen',
+            title: 'Sigue programado',
+            category: 'concert',
+            state: 'scheduled',
+            startAt: '2027-01-10T20:00:00-05:00',
+            sourcePayload: {},
+        },
+        {
+            sourceId: 'sweep',
+            externalId: 'sweep-missing',
+            title: 'Retirado por la fuente',
+            category: 'concert',
+            state: 'scheduled',
+            startAt: '2027-01-15T20:00:00-05:00',
+            sourcePayload: {},
+        },
+        {
+            sourceId: 'sweep',
+            externalId: 'sweep-beyond-window',
+            title: 'Fuera de ventana',
+            category: 'concert',
+            state: 'scheduled',
+            startAt: '2028-01-01T20:00:00-05:00',
+            sourcePayload: {},
+        },
+        {
+            sourceId: 'sweep-other-source',
+            externalId: 'other-001',
+            title: 'Otra fuente',
+            category: 'concert',
+            state: 'scheduled',
+            startAt: '2027-01-15T20:00:00-05:00',
+            sourcePayload: {},
+        },
+    ];
+
+    async function stateOf(externalId: string): Promise<string> {
+        const [row] = await db
+            .select({ state: events.state })
+            .from(events)
+            .where(eq(events.externalId, externalId));
+        assert(row, `expected ${externalId} to exist`);
+        return row.state;
+    }
+
+    beforeAll(async () => {
+        await upsertEvents(sweepFixtures);
+    });
+
+    it('cancels only future, in-window, unseen rows of the swept source', async () => {
+        const flipped = await cancelMissingEvents({
+            sourceId: 'sweep',
+            windowEnd: new Date('2027-06-01T00:00:00Z'),
+            seenExternalIds: ['sweep-seen'],
+        });
+        expect(flipped).toBe(1);
+        expect(await stateOf('sweep-missing')).toBe('cancelled');
+        expect(await stateOf('sweep-seen')).toBe('scheduled');
+        expect(await stateOf('sweep-past')).toBe('scheduled');
+        expect(await stateOf('sweep-beyond-window')).toBe('scheduled');
+        expect(await stateOf('other-001')).toBe('scheduled');
+    });
+
+    it('is idempotent — a second sweep flips nothing new', async () => {
+        const flipped = await cancelMissingEvents({
+            sourceId: 'sweep',
+            windowEnd: new Date('2027-06-01T00:00:00Z'),
+            seenExternalIds: ['sweep-seen'],
+        });
+        expect(flipped).toBe(0);
+    });
+});
+
 describe('scrapedEventSchema — rejection', () => {
     const validBase: ScrapedEvent = {
         sourceId: 'valid',
@@ -179,5 +348,12 @@ describe('scrapedEventSchema — rejection', () => {
     it('rejects an array containing any invalid element', () => {
         const batch: unknown[] = [validBase, { ...validBase, state: 'pending' }];
         expect(() => scrapedEventSchema.array().parse(batch)).toThrow(/state|enum/i);
+    });
+
+    it('rejects non-http(s) sourceUrl schemes (stored-XSS guard)', () => {
+        const malicious = { ...validBase, sourceUrl: 'javascript:alert(1)' };
+        expect(() => scrapedEventSchema.parse(malicious)).toThrow(/url|protocol/i);
+        const ftp = { ...validBase, sourceUrl: 'ftp://example.com/x' };
+        expect(() => scrapedEventSchema.parse(ftp)).toThrow(/url|protocol/i);
     });
 });

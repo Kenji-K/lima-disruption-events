@@ -72,6 +72,20 @@ describe('granTeatroNacionalScraper / parseCalendarHtml', () => {
         expect(montaje.length).toBeGreaterThan(0);
     });
 
+    it('returns [] for a month whose grid renders with no event anchors (unpublished month)', () => {
+        // GTN serves unpublished months as HTTP 200 + bare grid (verified live
+        // against /calendario/202702) — legitimately empty, not a markup change.
+        const gridOnly =
+            '<table><tbody><tr><td date-date="2027-02-01"><div class="contents"></div></td></tr></tbody></table>';
+        expect(parseCalendarHtml(gridOnly)).toEqual([]);
+    });
+
+    it('throws when no calendar grid exists at all (markup change)', () => {
+        expect(() =>
+            parseCalendarHtml('<html><body><p>sitio en mantenimiento</p></body></html>'),
+        ).toThrow(/no calendar grid/);
+    });
+
     it('captures AIDA 2026-05-17 17:00 as a known concrete event', () => {
         const aida = events.find((e) => e.externalId === 'aida:2026-05-17T17:00');
         expect(aida).toBeDefined();

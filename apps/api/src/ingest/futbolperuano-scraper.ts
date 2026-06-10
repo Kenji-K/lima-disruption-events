@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
 import { fetchWithRetry } from './fetch';
 import { VENUES, type ClubSlug } from './futbolperuano-venues';
+import type { ScrapeResult } from './types';
 
 const SOURCE_ID = 'futbolperuano';
 const BASE_URL = 'https://www.futbolperuano.com';
@@ -38,6 +39,10 @@ const sportsEventJsonLdSchema = z.object({
 
 export type ListingParse = {
     totalMatches: number;
+    // Matches whose href fits the m<id> path scheme — the signal that distinguishes
+    // "slug scheme changed" (0 parseable in a populated listing) from "no target
+    // club at home this window" (parseable > 0, targets empty).
+    parseableMatches: number;
     targetPaths: string[];
 };
 
@@ -62,7 +67,7 @@ export function parseListingHtml(html: string): ListingParse {
         }
     });
 
-    return { totalMatches: matchEls.length, targetPaths };
+    return { totalMatches: matchEls.length, parseableMatches: seen.size, targetPaths };
 }
 
 export function parseMatchHtml(html: string, path: string): ScrapedEvent {
@@ -136,7 +141,7 @@ export function parseMatchHtml(html: string, path: string): ScrapedEvent {
     };
 }
 
-export async function futbolperuanoScraper(log: Logger): Promise<ScrapedEvent[]> {
+export async function futbolperuanoScraper(log: Logger): Promise<ScrapeResult> {
     const scraperLog = log.child({ source: SOURCE_ID });
     const startedAt = Date.now();
     const listingUrl = `${BASE_URL}${LISTING_PATH}`;
@@ -154,25 +159,37 @@ export async function futbolperuanoScraper(log: Logger): Promise<ScrapedEvent[]>
         throw new Error(`futbolperuano: listing fetch failed (${listing.reason}${status})`);
     }
 
-    const { totalMatches, targetPaths } = parseListingHtml(listing.html);
+    const { totalMatches, parseableMatches, targetPaths } = parseListingHtml(listing.html);
     if (totalMatches === 0) {
         scraperLog.warn(
             'listing contains no matches at all (off-season?) — completing with zero events',
         );
-        return [];
+        return { events: [], sweepWindowEnd: null };
+    }
+    if (parseableMatches === 0) {
+        // Matches render but none fit the m<id> path scheme — upstream structure
+        // drift, not a quiet matchday. Fail loud.
+        throw new Error(
+            `futbolperuano: listing has ${totalMatches} matches but none parseable — slug scheme likely changed`,
+        );
     }
     if (targetPaths.length === 0) {
-        throw new Error(
-            `futbolperuano: listing has ${totalMatches} matches but none with a target home club — markup or slug scheme likely changed`,
+        // All three Lima clubs away in the visible window is a legitimate,
+        // recurring matchday shape — not an error.
+        scraperLog.warn(
+            { parseableMatches },
+            'no target-club home matches in this listing window — completing with zero events',
         );
+        return { events: [], sweepWindowEnd: null };
     }
 
     const events: ScrapedEvent[] = [];
     const failedList: string[] = [];
     let skipped4xx = 0;
 
-    for (const [i, path] of targetPaths.entries()) {
-        if (i > 0) await sleep(DETAIL_FETCH_DELAY_MS);
+    for (const path of targetPaths) {
+        // Listing fetch hits the same host, so the first detail fetch also waits.
+        await sleep(DETAIL_FETCH_DELAY_MS);
         const url = `${BASE_URL}${path}`;
         const outcome = await fetchWithRetry(url, scraperLog);
         if (outcome.ok) {
@@ -216,5 +233,7 @@ export async function futbolperuanoScraper(log: Logger): Promise<ScrapedEvent[]>
         },
         'scrape complete',
     );
-    return events;
+    // No sweep window: the listing is a rolling matchday view with no defined date
+    // bounds, and cancellations propagate via the source's own eventStatus field.
+    return { events, sweepWindowEnd: null };
 }

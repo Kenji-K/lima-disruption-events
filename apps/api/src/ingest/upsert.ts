@@ -7,6 +7,12 @@ export async function upsertEvents(
 ): Promise<{ inserted: number; updated: number }> {
     if (rows.length === 0) return { inserted: 0, updated: 0 };
 
+    // One batch = one INSERT statement; a duplicate (sourceId, externalId) inside
+    // it raises 21000 "cannot affect row a second time" and aborts the whole
+    // source's ingest (GTN renders adjacent-month spillover cells, so cross-month
+    // duplicates are plausible). Last wins — same as ON CONFLICT across batches.
+    const deduped = [...new Map(rows.map((r) => [`${r.sourceId}:${r.externalId}`, r])).values()];
+
     // Lima level-1 region — the single FK target for v0 scrapers (GTN +
     // futbolperuano's three Lima clubs all resolve here). Per ADR-005,
     // per-scraper resolution strategy is delegated; this is GTN's path.
@@ -22,7 +28,7 @@ export async function upsertEvents(
         );
     }
 
-    const dbEvents = rows.map((r) => ({
+    const dbEvents = deduped.map((r) => ({
         sourceId: r.sourceId,
         externalId: r.externalId,
         regionId: lima.id,
@@ -58,6 +64,6 @@ export async function upsertEvents(
         .returning({ inserted: sql<boolean>`(xmax = 0)` });
 
     const inserted = result.filter((r) => r.inserted).length;
-    const updated = rows.length - inserted;
+    const updated = deduped.length - inserted;
     return { inserted, updated };
 }

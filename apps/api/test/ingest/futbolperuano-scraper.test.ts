@@ -19,10 +19,23 @@ const matchHtml = readFileSync(
 );
 
 describe('futbolperuanoScraper / parseListingHtml', () => {
-    const { totalMatches, targetPaths } = parseListingHtml(listingHtml);
+    const { totalMatches, parseableMatches, targetPaths } = parseListingHtml(listingHtml);
 
     it('counts every match in the fixture (6 in the May 2026 matchday)', () => {
         expect(totalMatches).toBe(6);
+        expect(parseableMatches).toBe(6);
+    });
+
+    it('reports parseable matches with zero targets when all Lima clubs are away (warn-not-throw input)', () => {
+        // Swap the two target home clubs for provincial clubs — a legitimate
+        // all-away matchday, which the scraper completes with zero events.
+        const allAway = listingHtml
+            .replaceAll('/liga-1/alianza-lima-vs-', '/liga-1/cienciano-vs-')
+            .replaceAll('/liga-1/sporting-cristal-vs-', '/liga-1/adt-tarma-vs-');
+        const parsed = parseListingHtml(allAway);
+        expect(parsed.totalMatches).toBe(6);
+        expect(parsed.parseableMatches).toBe(6);
+        expect(parsed.targetPaths).toEqual([]);
     });
 
     it('keeps only target-home-club matches, deduped across the two anchors per match', () => {
