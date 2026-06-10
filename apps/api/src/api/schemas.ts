@@ -1,23 +1,11 @@
 import { z } from 'zod';
-import { locationSchema } from '@disruption-intelligence/shared';
+import { apiEventSchema, type ApiEvent } from '@disruption-intelligence/shared';
 
-// Canonical event shape served by the API. Dates are serialized ISO-8601 UTC;
-// location is the PostGIS point unpacked to {lng, lat} (null when the source
-// gave no coordinates).
-export const eventResponseSchema = z.object({
-    id: z.number().int(),
-    sourceId: z.string(),
-    externalId: z.string(),
-    regionId: z.number().int(),
-    title: z.string(),
-    category: z.string(),
-    state: z.enum(['scheduled', 'cancelled']),
-    startAt: z.iso.datetime(),
-    endAt: z.iso.datetime().nullable(),
-    location: locationSchema.nullable(),
-    sourceUrl: z.string().nullable(),
-});
-export type EventResponse = z.infer<typeof eventResponseSchema>;
+// Canonical event shape served by the API — lives in @disruption-intelligence/shared
+// as the cross-boundary contract with apps/web. Re-exported here so route schemas
+// and the OpenAPI spec stay anchored to the same object.
+export const eventResponseSchema = apiEventSchema;
+export type EventResponse = ApiEvent;
 
 export const eventsQuerySchema = z.object({
     from: z.iso
