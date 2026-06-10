@@ -12,7 +12,10 @@ export const scrapedEventSchema = z
         state: z.enum(['scheduled', 'cancelled']),
         category: z.string().min(1),
         sourcePayload: z.unknown(),
-        sourceUrl: z.url().optional(),
+        // http(s) only: a bare z.url() accepts javascript: URLs, and sourceUrl ends
+        // up in customer-facing <a href> — a scraper copying a raw upstream href
+        // must not be able to plant a stored-XSS payload.
+        sourceUrl: z.url({ protocol: /^https?$/ }).optional(),
     })
     .refine((data) => !data.endAt || new Date(data.endAt) > new Date(data.startAt), {
         error: 'endAt must be after startAt',
