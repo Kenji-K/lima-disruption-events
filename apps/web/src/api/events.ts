@@ -3,19 +3,20 @@ import { z } from 'zod';
 import { apiEventSchema, type ApiEvent } from '@disruption-intelligence/shared';
 import { env } from '../env';
 
-export interface EventFilters {
+export type EventFilters = {
     from?: string;
     to?: string;
     category?: string;
     source?: string;
-}
+};
 
 // Responses are Zod-validated at this boundary: a drifted API contract fails
 // loudly here instead of rendering garbage downstream.
 async function fetchEvents(filters: EventFilters): Promise<ApiEvent[]> {
     const url = new URL('/events', env.apiUrl);
     url.searchParams.set('limit', '500');
-    for (const [key, value] of Object.entries(filters)) {
+    for (const key of ['from', 'to', 'category', 'source'] as const) {
+        const value = filters[key];
         if (value) url.searchParams.set(key, value);
     }
     const res = await fetch(url);
@@ -36,7 +37,7 @@ export function useEvents(filters: EventFilters) {
 export function useEvent(id: string | undefined) {
     return useQuery({
         queryKey: ['event', id],
-        queryFn: () => fetchEvent(id as string),
+        queryFn: () => fetchEvent(id!),
         enabled: id !== undefined,
     });
 }

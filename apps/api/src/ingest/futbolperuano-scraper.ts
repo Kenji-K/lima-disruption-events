@@ -36,10 +36,10 @@ const sportsEventJsonLdSchema = z.object({
     competitor: z.array(z.object({ name: z.string() })).optional(),
 });
 
-export interface ListingParse {
+export type ListingParse = {
     totalMatches: number;
     targetPaths: string[];
-}
+};
 
 function homeClubOf(path: string): ClubSlug | undefined {
     const slug = path.slice(LISTING_PATH.length);

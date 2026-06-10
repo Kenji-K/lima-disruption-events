@@ -1,9 +1,29 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { pino } from 'pino';
 import type { FastifyInstance } from 'fastify';
-import { scrapedEventSchema, type ScrapedEvent } from '@disruption-intelligence/shared';
+import {
+    scrapedEventSchema,
+    type ApiEvent,
+    type ScrapedEvent,
+} from '@disruption-intelligence/shared';
 import { upsertEvents } from '../../src/ingest/upsert';
 import { buildServer } from '../../src/server';
+
+// Slice of the OpenAPI document the spec test asserts against.
+type OpenApiSpecSlice = {
+    paths: Record<
+        string,
+        {
+            get?: {
+                parameters: { name: string }[];
+                responses: Record<
+                    string,
+                    { content: Record<string, { schema: { type: string } } | undefined> }
+                >;
+            };
+        }
+    >;
+};
 
 // Each vitest fork gets its own Testcontainers DB (see test/setup.ts), so these
 // fixtures are the only events present.
@@ -64,20 +84,17 @@ describe('GET /events', () => {
     it('returns all events ordered by startAt ascending', async () => {
         const res = await app.inject({ method: 'GET', url: '/events' });
         expect(res.statusCode).toBe(200);
-        const body = res.json();
+        const body = res.json<ApiEvent[]>();
         expect(body).toHaveLength(3);
-        expect(body.map((e: { title: string }) => e.title)).toEqual([
-            'Concierto A',
-            'Partido B',
-            'Cierre C',
-        ]);
+        expect(body.map((e) => e.title)).toEqual(['Concierto A', 'Partido B', 'Cierre C']);
     });
 
     it('serializes location to {lng, lat} and missing endAt/location to null', async () => {
         const res = await app.inject({ method: 'GET', url: '/events' });
-        const [concierto, partido] = res.json();
-        expect(concierto.location.lng).toBeCloseTo(-77.0339, 4);
-        expect(concierto.location.lat).toBeCloseTo(-12.0683, 4);
+        const [concierto, partido] = res.json<ApiEvent[]>();
+        if (!concierto || !partido) throw new Error('expected at least two events');
+        expect(concierto.location?.lng).toBeCloseTo(-77.0339, 4);
+        expect(concierto.location?.lat).toBeCloseTo(-12.0683, 4);
         expect(concierto.startAt).toBe('2026-07-02T01:00:00.000Z');
         expect(concierto.endAt).toBe('2026-07-02T04:00:00.000Z');
         expect(concierto.sourceUrl).toBe('https://example.com/e1');
@@ -92,9 +109,9 @@ describe('GET /events', () => {
             url: '/events',
             query: { from: '2026-07-04T00:00:00-05:00', to: '2026-07-06T00:00:00-05:00' },
         });
-        const body = res.json();
+        const body = res.json<ApiEvent[]>();
         expect(body).toHaveLength(1);
-        expect(body[0].title).toBe('Partido B');
+        expect(body[0]?.title).toBe('Partido B');
     });
 
     it('filters by category', async () => {
@@ -103,7 +120,7 @@ describe('GET /events', () => {
             url: '/events',
             query: { category: 'concert' },
         });
-        expect(res.json().map((e: { externalId: string }) => e.externalId)).toEqual(['e1']);
+        expect(res.json<ApiEvent[]>().map((e) => e.externalId)).toEqual(['e1']);
     });
 
     it('filters by source', async () => {
@@ -112,7 +129,7 @@ describe('GET /events', () => {
             url: '/events',
             query: { source: 'api-test-2' },
         });
-        expect(res.json().map((e: { externalId: string }) => e.externalId)).toEqual(['e3']);
+        expect(res.json<ApiEvent[]>().map((e) => e.externalId)).toEqual(['e3']);
     });
 
     it('respects limit', async () => {
@@ -142,7 +159,8 @@ describe('GET /events/:id', () => {
             url: '/events',
             query: { source: 'api-test' },
         });
-        const id: number = list.json()[0].id;
+        const id = list.json<ApiEvent[]>()[0]?.id;
+        if (id === undefined) throw new Error('expected at least one api-test event');
         const res = await app.inject({ method: 'GET', url: `/events/${id}` });
         expect(res.statusCode).toBe(200);
         expect(res.json()).toMatchObject({ id, title: 'Concierto A', state: 'scheduled' });
@@ -164,18 +182,18 @@ describe('OpenAPI at /docs', () => {
     it('serves the generated spec with all three routes', async () => {
         const res = await app.inject({ method: 'GET', url: '/docs/json' });
         expect(res.statusCode).toBe(200);
-        const spec = res.json();
+        const spec = res.json<OpenApiSpecSlice>();
         expect(Object.keys(spec.paths)).toEqual(
             expect.arrayContaining(['/healthz', '/events', '/events/{id}']),
         );
         // Spot-check the spec reflects the Zod schemas: /events 200 is an array
         // and the querystring filters are documented.
-        const eventsGet = spec.paths['/events'].get;
-        const paramNames = eventsGet.parameters.map((p: { name: string }) => p.name);
-        expect(paramNames).toEqual(
+        const eventsGet = spec.paths['/events']?.get;
+        if (!eventsGet) throw new Error('expected GET /events in the OpenAPI spec');
+        expect(eventsGet.parameters.map((p) => p.name)).toEqual(
             expect.arrayContaining(['from', 'to', 'category', 'source', 'limit']),
         );
-        expect(eventsGet.responses['200'].content['application/json'].schema.type).toBe('array');
+        expect(eventsGet.responses['200']?.content['application/json']?.schema.type).toBe('array');
     });
 
     it('serves the swagger UI page', async () => {

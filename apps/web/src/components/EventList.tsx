@@ -2,11 +2,11 @@ import { Link, useLocation, useMatch } from 'react-router';
 import type { ApiEvent } from '@disruption-intelligence/shared';
 import { categoryLabel, formatDateTime, sourceLabel } from '../format';
 
-interface Props {
+type Props = {
     events: ApiEvent[] | undefined;
     isPending: boolean;
     isError: boolean;
-}
+};
 
 export default function EventList({ events, isPending, isError }: Props) {
     const { search } = useLocation();

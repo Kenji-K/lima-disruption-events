@@ -5,6 +5,8 @@ build/
 coverage/
 pnpm-lock.yaml
 packages/db/migrations/
+# Scraped-HTML test fixtures are frozen upstream snapshots, never reformatted.
+apps/api/test/ingest/fixtures/
 mockup/
 .env
 .env.*

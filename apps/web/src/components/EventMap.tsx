@@ -96,7 +96,7 @@ export default function EventMap({ events }: { events: ApiEvent[] }) {
             const popup = new maplibregl.Popup({ offset: 18, maxWidth: '280px' }).setDOMContent(
                 popupContent(group, (id) => {
                     const { navigate: nav, search: s } = routerRef.current;
-                    nav({ pathname: `/eventos/${id}`, search: s });
+                    void nav({ pathname: `/eventos/${id}`, search: s });
                 }),
             );
             const marker = new maplibregl.Marker({ element: markerElement(group.length) })

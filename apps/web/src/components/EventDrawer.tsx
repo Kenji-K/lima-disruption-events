@@ -25,7 +25,7 @@ export default function EventDrawer() {
                 </h2>
                 <button
                     type="button"
-                    onClick={() => navigate({ pathname: '/', search })}
+                    onClick={() => void navigate({ pathname: '/', search })}
                     aria-label="Cerrar"
                     className="cursor-pointer rounded px-2 text-xl leading-none text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
                 >

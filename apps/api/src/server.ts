@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import fastifyCors from '@fastify/cors';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
@@ -12,12 +12,15 @@ import type { Logger } from 'pino';
 import { registerRoutes } from './api/routes';
 
 export async function buildServer(log: Logger): Promise<FastifyInstance> {
-    const app = Fastify({
-        // One process, one logger: reuse the app-wide pino singleton so HTTP and
-        // ingest logs share config. Fastify attaches a per-request child with reqId.
-        loggerInstance: log as FastifyBaseLogger,
+    // One process, one logger: reuse the app-wide pino singleton so HTTP and
+    // ingest logs share config. Fastify attaches a per-request child with reqId.
+    // Typed as FastifyServerOptions so the instance keeps the default logger
+    // generic instead of binding to pino's wider Logger type.
+    const options: FastifyServerOptions = {
+        loggerInstance: log,
         genReqId: () => randomUUID(),
-    });
+    };
+    const app = Fastify(options);
 
     app.setValidatorCompiler(validatorCompiler);
     app.setSerializerCompiler(serializerCompiler);

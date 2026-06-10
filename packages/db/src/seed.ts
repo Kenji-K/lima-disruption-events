@@ -43,7 +43,6 @@
  * count and the message log honest.
  */
 
-import { sql } from 'drizzle-orm';
 import { db as defaultDb } from './client';
 import { regions } from './schema/regions';
 

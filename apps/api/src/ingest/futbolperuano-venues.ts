@@ -2,14 +2,14 @@ import type { Location } from '@disruption-intelligence/shared';
 
 export type ClubSlug = 'universitario-de-deportes' | 'alianza-lima' | 'sporting-cristal';
 
-export interface Venue {
+export type Venue = {
     stadiumName: string;
     // Substring expected inside the JSON-LD SportsEvent.location string. Defensive
     // cross-check at parse time: a mismatch means a venue swap or rename (Liga 1 clubs
     // occasionally relocate matches) — programmer error, update this map deliberately.
     jsonLdLocationContains: string;
     location: Location;
-}
+};
 
 // Static venue map for the three Lima home clubs (the home-team filter's key set).
 // Region resolution stays in upsert.ts (single Lima level-1 lookup per ADR-005) since
