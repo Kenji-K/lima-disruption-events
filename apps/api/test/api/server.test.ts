@@ -61,15 +61,23 @@ const fixtures: ScrapedEvent[] = [
 ];
 
 let app: FastifyInstance;
+let boomApp: FastifyInstance;
 
 beforeAll(async () => {
     await upsertEvents(scrapedEventSchema.array().parse(fixtures));
     app = await buildServer(pino({ level: 'silent' }));
     await app.ready();
+    // Separate instance with a test-only throwing route, for error-handler assertions.
+    boomApp = await buildServer(pino({ level: 'silent' }));
+    boomApp.get('/__boom', () => {
+        throw new Error('Failed query: select "secret_column" from "events" params: 1,2');
+    });
+    await boomApp.ready();
 });
 
 afterAll(async () => {
     await app.close();
+    await boomApp.close();
 });
 
 describe('GET /healthz', () => {
@@ -175,6 +183,45 @@ describe('GET /events/:id', () => {
     it('400s on a non-numeric id', async () => {
         const res = await app.inject({ method: 'GET', url: '/events/abc' });
         expect(res.statusCode).toBe(400);
+    });
+
+    it('400s on an id beyond int4 instead of leaking a Postgres error', async () => {
+        const res = await app.inject({ method: 'GET', url: '/events/99999999999' });
+        expect(res.statusCode).toBe(400);
+        expect(res.body).not.toMatch(/select|Failed query/i);
+    });
+});
+
+describe('error sanitization and abuse guards', () => {
+    it('sanitizes 5xx responses — no error message internals reach the client', async () => {
+        // Test-only route throwing a Drizzle-shaped error message; the handler must
+        // log it and return the generic body.
+        const res = await boomApp.inject({ method: 'GET', url: '/__boom' });
+        expect(res.statusCode).toBe(500);
+        expect(res.json()).toEqual({
+            statusCode: 500,
+            error: 'Internal Server Error',
+            message: 'Internal Server Error',
+        });
+        expect(res.body).not.toContain('Failed query');
+    });
+
+    it('serves rate-limit headers (limiter active)', async () => {
+        const res = await app.inject({ method: 'GET', url: '/events' });
+        expect(res.headers['x-ratelimit-limit']).toBeDefined();
+        expect(res.headers['x-ratelimit-remaining']).toBeDefined();
+    });
+
+    it('CORS preflight only advertises read methods', async () => {
+        const res = await app.inject({
+            method: 'OPTIONS',
+            url: '/events',
+            headers: {
+                origin: 'https://example.com',
+                'access-control-request-method': 'GET',
+            },
+        });
+        expect(res.headers['access-control-allow-methods']).toBe('GET, HEAD');
     });
 });
 

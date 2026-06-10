@@ -30,7 +30,9 @@ export const eventsQuerySchema = z.object({
 });
 
 export const eventIdParamsSchema = z.object({
-    id: z.coerce.number().int().positive(),
+    // Capped at int4 max: the column is serial, and an over-range bind parameter
+    // is a Postgres error (a leaky 500), not a clean 404.
+    id: z.coerce.number().int().positive().max(2_147_483_647),
 });
 
 export const healthzOkSchema = z.object({

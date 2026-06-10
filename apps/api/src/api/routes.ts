@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -12,6 +13,8 @@ import {
     notFoundSchema,
     type EventResponse,
 } from './schemas';
+
+const DB_PING_TIMEOUT_MS = 2_000;
 
 // Shared SELECT projection: PostGIS point unpacked to lng/lat at the DB
 // (ST_X/ST_Y return null for null locations, so the null-location case flows through).
@@ -74,8 +77,19 @@ export function registerRoutes(app: FastifyInstance): void {
             },
         },
         async (req, reply) => {
+            // postgres.js's default connect timeout (30s) far exceeds any health-check
+            // window — race the ping so a down DB yields the designed 503, not a
+            // checker-side timeout. The swallowed catch absorbs the losing promise's
+            // late rejection so it can't surface as an unhandled rejection.
             try {
-                await db.execute(sql`select 1`);
+                const ping = db.execute(sql`select 1`);
+                ping.catch(() => undefined);
+                await Promise.race([
+                    ping,
+                    sleep(DB_PING_TIMEOUT_MS).then(() => {
+                        throw new Error(`db ping exceeded ${DB_PING_TIMEOUT_MS}ms`);
+                    }),
+                ]);
                 return { status: 'ok' as const, db: 'ok' as const };
             } catch (err) {
                 req.log.error({ err }, 'healthz db ping failed');
