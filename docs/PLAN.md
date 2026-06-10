@@ -64,7 +64,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 - [ ] Live URL reachable on the public internet
 - [ ] At least 20 real events from at least 2 sources visible
 - [ ] Re-running the ingest pipeline produces zero duplicates
-- [ ] All four ADRs (001, 002, 003, 004) written and committed
+- [x] All five ADRs (001, 002, 003, 004, 005) written and committed _(005 added 2026-05-06: regions as generic hierarchical dimension)_
 - [ ] API and Postgres deployed to the same Fly region; API connects to DB over `6PN` (verifiable in connection string / Fly console)
 - [ ] DATABASE.md includes the VACUUM/autovacuum paragraph (interview-rehearsable, concrete not abstract)
 - [ ] ARCHITECTURE.md includes a "Deferred decisions" section with revisit triggers
@@ -81,7 +81,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Branch:** `main`. Local and `origin/main` are in sync at the sync point below. For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
 
-**Last sync point:** `aca169e chore(api): remove stub-scraper now that real scraper is live`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log aca169e..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
+**Last sync point:** `dc1f626 feat(db): add seed script + 24 Peru level-1 regions`. This is HEAD as of the commit immediately before this PLAN.md update. If `git log dc1f626..HEAD` shows commits other than this PLAN.md update itself, work has landed since the last sync — read those commits before trusting "Next move."
 
 **Local stack running:**
 
@@ -94,40 +94,36 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Workspace structure (post-sync):**
 
-- `packages/db` — public surface via `exports: { ".": "./src/index.ts" }`. Top-level barrel re-exports both the schema barrel (`cities`, `events`) and `client.ts` (`db`, `closeDb`). Runtime Drizzle client mirrors drizzle-kit's `casing: 'snake_case'` — see ARCHITECTURE.md "Drizzle runtime client conventions" for why both sides need the option.
-- `packages/shared` — public surface, exports `scrapedEventSchema`/`ScrapedEvent` (Zod boundary type for scraper output, now including optional `sourceUrl: z.url()`) and `locationSchema`/`Location`. The `endAt > startAt` cross-field refine compares Date instants to handle mixed offsets safely. No string→Date `.transform()` — that conversion belongs in the upsert layer, not the validation boundary.
+- `packages/db` — public surface via `exports: { ".": "./src/index.ts", "./seed": "./src/seed.ts" }`. Top-level barrel re-exports both the schema barrel (`regions`, `events`) and `client.ts` (`db`, `closeDb`). The separate `./seed` subpath exports `seed(db)` so the test setup and the `pnpm seed` CLI can pull it without dragging the seed call through the main barrel. Runtime Drizzle client mirrors drizzle-kit's `casing: 'snake_case'` — see ARCHITECTURE.md "Drizzle runtime client conventions" for why both sides need the option.
+- `packages/shared` — public surface, exports `scrapedEventSchema`/`ScrapedEvent` (Zod boundary type for scraper output, including optional `sourceUrl: z.url()`) and `locationSchema`/`Location`. The `endAt > startAt` cross-field refine compares Date instants to handle mixed offsets safely. No string→Date `.transform()` — that conversion belongs in the upsert layer, not the validation boundary.
 - `apps/api` — full ingest pipeline live against a real source:
   - `src/ingest/gran-teatro-nacional-scraper.ts` — Cheerio parser of `granteatronacional.pe/calendario/YYYYMM` over a 3-month window. Two-phase fetch retry (1+3 in-call attempts, then a single end-of-run pass over the failedList). Three GTN-HTML quirks handled in-line with comments: repeat-cell `<time datetime>` carries the first occurrence's date (combine `td.date-date` + `<time>` time-of-day instead); empty `cat-*` class on uncategorized events falls back to `'proximamente'`; `"¡Es gratis!"` overrides popup text on free events but the `cat-*` class is the source of truth.
   - `src/ingest/run.ts` — shared `runIngestOnce(log)` used by both the one-off and the cron worker.
   - `src/ingest/index.ts` — thin shell: `runIngestOnce` wrapped in finally-`closeDb` for `pnpm -F api ingest`.
-  - `src/ingest/upsert.ts` — unchanged from the stub era. Bulk insert + `.onConflictDoUpdate` keyed on `(sourceId, externalId)` per ADR-003; boundary conversions (ISO→Date, `{lng,lat}`→PostGIS WKT); inserted-vs-updated count via `RETURNING (xmax = 0)`; `cityId` resolved by single `cities.slug = 'lima'` lookup.
+  - `src/ingest/upsert.ts` — Bulk insert + `.onConflictDoUpdate` keyed on `(sourceId, externalId)` per ADR-003; boundary conversions (ISO→Date, `{lng,lat}`→PostGIS WKT); inserted-vs-updated count via `RETURNING (xmax = 0)`; `regionId` resolved by single `regions.slug = 'lima' AND country_code = 'PE' AND level = 1` composite lookup (per ADR-005, was `cities.slug = 'lima'` pre-rename).
   - `src/cron.ts` — `pnpm -F api cron` standalone scheduler. Daily 06:00 `America/Lima` via node-cron 4.x. `noOverlap: true` skips a tick if the previous one is still running. SIGTERM/SIGINT trigger graceful shutdown (stop task, `closeDb`, exit 0). When Fastify lands in Week 2 the schedule attaches to its lifecycle.
   - Direct deps now include `drizzle-orm`, `cheerio`, `node-cron` (each workspace declares what it directly imports — see CLAUDE.md/ARCHITECTURE.md on pnpm strict isolation).
-  - `test/setup.ts` + `test/ingest/upsert.test.ts` + `test/ingest/gran-teatro-nacional-scraper.test.ts` — 18 tests total. The new scraper test runs purely against a co-located fixture (`test/ingest/fixtures/gran-teatro-nacional-calendario-202605.html`) and does not need Postgres; the pipeline test still uses the Testcontainers harness. `pnpm -F api test` runs once; `pnpm -F api test:watch` for iteration. Total wall-clock ~6–10s including container boot.
+  - `test/setup.ts` — top-level await on `migrate()` then `seed()` so test files load against a Testcontainers DB pre-populated with all 25 regions. `test/ingest/upsert.test.ts` + `test/ingest/gran-teatro-nacional-scraper.test.ts` — 18 tests total. The scraper test runs purely against a co-located fixture and does not need Postgres; the pipeline test uses the Testcontainers harness. `pnpm -F api test` runs once; `pnpm -F api test:watch` for iteration. Total wall-clock ~6–10s including container boot.
 
-**Uncommitted work in tree:** this PLAN.md update + the ARCHITECTURE.md "Scraper conventions" addition + a column-name nit fix in `docs/plans/scraper-1-gran-teatro-nacional.md`. All staged for the session-wrap commit. Otherwise tree is clean as of `aca169e`.
+**Uncommitted work in tree:** this PLAN.md update + the ARCHITECTURE.md additions for the migration-vs-seed split convention + the hand-authored-migration pattern + the reference-data-provenance convention. All staged for the session-wrap commit. Two test fixtures untracked at `apps/api/test/ingest/fixtures/futbolperuano-*.html` — they belong with the upcoming Scraper #2 implementation commit (#4 in the scraper-2 plan), so deliberately not in any wrap-up commit. Otherwise tree is clean as of `dc1f626`.
 
 ---
 
 ## Next move
 
-**Week 1 is closed. Open Week 2: Fastify HTTP API.** The scraper is live (Gran Teatro Nacional, 83 events for May/Jun/Jul) and the cron is wired (daily 06:00 Lima). The next gate is exposing the data via a Zod-validated HTTP API.
+**Scraper #2 was decided before Fastify** (the open question that previously sat in this section). Source-survey work landed in Notion ([Bitácora — Scraper #2](https://www.notion.so/35803c87ab7081f4960fde3c9753c6c5)); ADR-005 + the schema-rename migration + the seed script all landed this session (commits `9fe7636` → `dc1f626`). The remaining Scraper #2 work is two commits per [`docs/plans/scraper-2-futbolperuano.md`](plans/scraper-2-futbolperuano.md):
 
-### Scope of the next commit
+### Scope of the next two commits
 
-1. **Fastify scaffold inside `apps/api`** — Fastify ^5 with `fastify-type-provider-zod` so request/response schemas are Zod-defined and the OpenAPI spec is generated, not hand-written. Decision deferred to implementation: keep the cron as a separate `pnpm -F api cron` entry, or attach it to the Fastify lifecycle now? Cleanest answer is to attach now (one process, one logger); revisit only if the cron and the API ever need to scale independently.
-2. **Three endpoints** to start: `GET /healthz` (returns `{ ok: true }` plus a DB ping), `GET /events` (filtered list — at minimum a `?from=&to=&category=&limit=` shape), `GET /events/:id` (single event, 404 if missing). The list filter should at least cover the time-range BRIN-friendly query so ADR-001 gets exercised against real data.
-3. **OpenAPI exposed at `/docs`** via `@scalar/fastify-api-reference` (or the simpler swagger-ui plugin). The spec is the artifact most worth showing in interviews; auto-generated from the Zod schemas means it can never drift from the implementation.
-4. **No frontend yet.** That's the second half of Week 2; landing it in a separate commit keeps the diffs scannable and lets the API be exercised via curl/HTTPie before the React app is in the loop.
+1. **`refactor(api): extract fetchWithRetry to shared helper`** — lift the two-phase retry wrapper out of `gran-teatro-nacional-scraper.ts` into `apps/api/src/ingest/fetch.ts`. ARCHITECTURE.md "Scraper conventions" already flagged this for when scraper #2 lands. GTN imports the shared helper; existing GTN scraper test should pass without changes.
+2. **`feat(api): real scraper for futbolperuano.com Liga 1 (Universitario, Alianza Lima, Sporting Cristal)`** — `apps/api/src/ingest/futbolperuano-scraper.ts` + `futbolperuano-venues.ts` + integration glue in `run.ts` + a new fixture-driven parser test. JSON-LD extraction from each match's detail page (the SportsEvent block lives inside `Review.itemReviewed`); home-team filter via URL slug; static venue→region map (all three target stadiums resolve to Lima level-1). Two test fixtures already saved untracked at `apps/api/test/ingest/fixtures/futbolperuano-*.html`.
 
-### Open question to resolve before starting Week 2
+After these land, "≥20 real events from ≥2 sources" (v0 Definition of Done) is satisfied and the pipeline-abstraction claim has two genuinely contrasting sources behind it (HTML/Cheerio vs JSON-LD). Then Week 2 opens Fastify proper.
 
-**Scraper #2 timing.** Originally Week 2 scheduled "Second scraper plugged into the same pipeline." Two viable choices to surface in a discussion:
+### What comes after Scraper #2 (queued, not next)
 
-- **Land Scraper #2 immediately** (before Fastify) so the pipeline-abstraction claim has two sources behind it before the API ships. Candidate: Teleticket aggregator (covers Estadio Nacional via venue-string match — see [`docs/plans/scraper-1-gran-teatro-nacional.md`](plans/scraper-1-gran-teatro-nacional.md) source-survey conclusions).
-- **Defer Scraper #2 to mid-Week-2** (after Fastify) so the API ships against real data sooner. Risk: the abstraction stays single-call and only gets stress-tested late.
-
-This needs to be picked before code starts. v0's Definition of done says "≥20 real events from ≥2 sources" — so #2 ships by Week 3 either way; only the order is open.
+- **Fastify scaffold + three endpoints + OpenAPI at `/docs`** — original Week 2 plan, see Open questions below for the cron-attachment decision (lean: attach to Fastify lifecycle when it lands).
+- **Frontend (Vite + React + Tailwind + MapLibre + TanStack Query)** — second half of Week 2.
 
 ---
 
