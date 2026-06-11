@@ -6,6 +6,7 @@ import { granTeatroNacionalScraper } from './gran-teatro-nacional-scraper';
 import { futbolperuanoScraper } from './futbolperuano-scraper';
 import { mmlScraper, MML_SOURCE_ID } from './mml-scraper';
 import { limaExpresaScraper, LIMA_EXPRESA_SOURCE_ID } from './lima-expresa-scraper';
+import { recurringEventsScraper, RECURRING_SOURCE_ID } from './recurring-events';
 import { upsertEvents } from './upsert';
 import { cancelMissingEvents } from './sweep';
 import { getCursor, recordFailure, recordSuccess } from './state';
@@ -18,6 +19,7 @@ const SCRAPERS: Scraper[] = [
     { name: 'futbolperuano', scrape: futbolperuanoScraper },
     { name: MML_SOURCE_ID, scrape: mmlScraper },
     { name: LIMA_EXPRESA_SOURCE_ID, scrape: limaExpresaScraper },
+    { name: RECURRING_SOURCE_ID, scrape: recurringEventsScraper },
 ];
 
 // `scrapers` is injectable for orchestration tests only; production callers
