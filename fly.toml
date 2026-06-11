@@ -2,7 +2,7 @@
 # the in-process node-cron schedule must fire exactly once per tick, so no
 # autostop and no HA pair. See docs/adr/006-deploy-topology-self-managed-postgis-on-fly.md.
 app = 'disruption-intelligence-api'
-primary_region = 'scl'
+primary_region = 'gru'
 
 [build]
 dockerfile = 'apps/api/Dockerfile'

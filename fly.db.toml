@@ -5,10 +5,10 @@
 # disruption-intelligence-db.internal:5432.
 #
 # Deploy: fly deploy -c fly.db.toml --ha=false
-# Volume (once): fly volumes create pg_data --region scl --size 1 -a disruption-intelligence-db
+# Volume (once): fly volumes create pg_data --region gru --size 1 -a disruption-intelligence-db
 # Secret (once): fly secrets set POSTGRES_PASSWORD=<generated> -a disruption-intelligence-db
 app = 'disruption-intelligence-db'
-primary_region = 'scl'
+primary_region = 'gru'
 
 [build]
 image = 'postgis/postgis:16-3.5'
