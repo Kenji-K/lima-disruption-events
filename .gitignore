@@ -37,3 +37,6 @@ npm-debug.log*
 
 # Excluding mockup files due to potential image file size
 mockup/
+
+# Vercel CLI artifacts
+.vercel/
