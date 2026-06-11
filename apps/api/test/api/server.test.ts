@@ -236,6 +236,88 @@ describe('GET /events/:id', () => {
     });
 });
 
+describe('public-visibility gate (demo fence, PLAN 2026-06-11 workshop)', () => {
+    // futbolperuano + joinnus rows exist only in this block; the gate must keep
+    // them off every public read path unless EXPOSE_GATED_SOURCES is set.
+    const gated: ScrapedEvent[] = [
+        {
+            sourceId: 'futbolperuano',
+            externalId: 'gate-1',
+            title: 'Partido gated',
+            category: 'futbol',
+            state: 'scheduled',
+            startAt: '2026-08-01T18:00:00-05:00',
+            sourcePayload: { fixture: true },
+        },
+        {
+            sourceId: 'joinnus',
+            externalId: 'gate-2',
+            title: 'Concierto gated',
+            category: 'concert',
+            state: 'scheduled',
+            startAt: '2026-08-02T20:00:00-05:00',
+            sourcePayload: { fixture: true },
+        },
+    ];
+    let gatedIds: number[] = [];
+
+    beforeAll(async () => {
+        await upsertEvents(scrapedEventSchema.array().parse(gated));
+        const all = await app.inject({
+            method: 'GET',
+            url: '/events',
+            query: { source: 'joinnus' },
+        });
+        void all; // ids resolved below via the ungated server
+    });
+
+    it('excludes gated sources from /events, even when filtered for explicitly', async () => {
+        const list = await app.inject({ method: 'GET', url: '/events' });
+        const titles = list.json<ApiEvent[]>().map((e) => e.title);
+        expect(titles).not.toContain('Partido gated');
+        expect(titles).not.toContain('Concierto gated');
+
+        const filtered = await app.inject({
+            method: 'GET',
+            url: '/events',
+            query: { source: 'futbolperuano' },
+        });
+        expect(filtered.json<ApiEvent[]>()).toEqual([]);
+    });
+
+    it('404s gated events on /events/:id', async () => {
+        const demoApp = await buildServer(pino({ level: 'silent' }), {
+            exposeGatedSources: true,
+        });
+        await demoApp.ready();
+        const demoList = await demoApp.inject({
+            method: 'GET',
+            url: '/events',
+            query: { source: 'joinnus' },
+        });
+        gatedIds = demoList.json<ApiEvent[]>().map((e) => e.id);
+        expect(gatedIds.length).toBeGreaterThan(0);
+        await demoApp.close();
+
+        const res = await app.inject({ method: 'GET', url: `/events/${gatedIds[0]}` });
+        expect(res.statusCode).toBe(404);
+    });
+
+    it('serves gated sources when the demo flag is on', async () => {
+        const demoApp = await buildServer(pino({ level: 'silent' }), {
+            exposeGatedSources: true,
+        });
+        await demoApp.ready();
+        const list = await demoApp.inject({ method: 'GET', url: '/events' });
+        const titles = list.json<ApiEvent[]>().map((e) => e.title);
+        expect(titles).toContain('Partido gated');
+        expect(titles).toContain('Concierto gated');
+        const byId = await demoApp.inject({ method: 'GET', url: `/events/${gatedIds[0]}` });
+        expect(byId.statusCode).toBe(200);
+        await demoApp.close();
+    });
+});
+
 describe('GET /sources', () => {
     it('exposes per-source freshness from ingest_state (Tier-2 acceptance)', async () => {
         await recordSuccess('freshness-test-source', { probe: true });

@@ -6,7 +6,10 @@ import { env } from './env';
 import { log } from './log';
 import { createIngestTask, createRoadAlertTask } from './ingest/schedule';
 
-const app = await buildServer(log);
+const app = await buildServer(log, { exposeGatedSources: env.EXPOSE_GATED_SOURCES });
+if (env.EXPOSE_GATED_SOURCES) {
+    log.warn('EXPOSE_GATED_SOURCES is ON — gated sources are publicly visible (demo mode)');
+}
 
 // 5xx responses reach Sentry via an onError hook; the sanitized error handler
 // in server.ts still controls what the client sees. No-op without a DSN.

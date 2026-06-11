@@ -14,9 +14,12 @@ import {
     validatorCompiler,
 } from 'fastify-type-provider-zod';
 import type { Logger } from 'pino';
-import { registerRoutes } from './api/routes';
+import { registerRoutes, type RouteOptions } from './api/routes';
 
-export async function buildServer(log: Logger): Promise<FastifyInstance> {
+export async function buildServer(
+    log: Logger,
+    routeOptions: RouteOptions = {},
+): Promise<FastifyInstance> {
     // One process, one logger: reuse the app-wide pino singleton so HTTP and
     // ingest logs share config. Fastify attaches a per-request child with reqId.
     // Typed as FastifyServerOptions so the instance keeps the default logger
@@ -71,7 +74,7 @@ export async function buildServer(log: Logger): Promise<FastifyInstance> {
     });
     await app.register(fastifySwaggerUi, { routePrefix: '/docs' });
 
-    registerRoutes(app);
+    registerRoutes(app, routeOptions);
 
     return app;
 }

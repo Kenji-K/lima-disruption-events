@@ -13,7 +13,7 @@ This is the ingestion tier of a B2B mobility-intelligence product for fleet oper
 
 TypeScript end to end. pnpm workspaces: `apps/api` (Fastify 5 + Drizzle + node-cron ingest), `apps/web` (Vite + React + MapLibre GL + TanStack Query), `packages/db` (Drizzle schema + migrations), `packages/shared` (Zod boundary schemas). PostgreSQL 16 + PostGIS. Tests with Vitest + Testcontainers (real Postgres, no mocks). Sentry on both apps.
 
-**Data sources (5 live):** Gran Teatro Nacional, futbolperuano.com (Liga 1 home matches), Municipalidad de Lima WordPress feed, Lima Expresa pressroom, hardcoded recurring events (races, Fiestas Patrias parade). Per-source incremental cursors and freshness tracking live in the `ingest_state` table (ADR-007).
+**Data sources (11 live):** Gran Teatro Nacional, futbolperuano.com (Liga 1 home matches), Municipalidad de Lima WordPress feed, Lima Expresa pressroom, hardcoded recurring events (races, Fiestas Patrias parade), gob.pe institutional news (ATU, SUTRAN, MTC, munilima — cross-channel dedup per ADR-009), Joinnus ticketer (Lima concerts/sports), Costa 21 venue calendar. Plus the **SUTRAN road-alert layer** (ADR-010): a 2-hourly snapshot mirror of the national road-state viewer, served at `/road-alerts` and rendered as a toggleable map layer. Per-source incremental cursors and freshness tracking live in the `ingest_state` table (ADR-007), exposed at `GET /sources`.
 
 ## Local development
 
@@ -26,6 +26,7 @@ pnpm -F @disruption-intelligence/db seed              # idempotent reference dat
 pnpm -F api dev                                       # Fastify on :3000 (cron attached)
 pnpm -F web dev                                       # Vite on :5173
 pnpm -F api ingest                                    # run all scrapers once
+pnpm -F api import-events <file.json|file.csv>        # manual import (Ord. 1680 path)
 pnpm test                                             # full suite (Testcontainers)
 pnpm typecheck && pnpm lint
 ```
@@ -34,12 +35,12 @@ pnpm typecheck && pnpm lint
 
 Decided in ADR-004/006/008 (`docs/adr/`): two Fly.io apps in region `gru` (São Paulo — the only South American Fly region since `scl` was retired), talking over Fly's private 6PN network; frontend on Vercel.
 
-| Piece | Where | Notes |
-| --- | --- | --- |
-| API | Fly app `disruption-intelligence-api` | one always-on machine (in-process cron must tick exactly once); runs raw TS via tsx |
-| Postgres + PostGIS | Fly app `disruption-intelligence-db` | official `postgis/postgis:16-3.5` image, 1GB volume, **no public IP** — only reachable over 6PN at `disruption-intelligence-db.internal:5432` |
-| Web | Vercel project `lima-disruption-events` | static Vite build, SPA rewrites via `apps/web/vercel.json` |
-| Migrations + seed | Fly `release_command` | programmatic drizzle-orm migrator (`packages/db/src/release-cli.ts`) runs before every deploy is promoted |
+| Piece              | Where                                   | Notes                                                                                                                                         |
+| ------------------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| API                | Fly app `disruption-intelligence-api`   | one always-on machine (in-process cron must tick exactly once); runs raw TS via tsx                                                           |
+| Postgres + PostGIS | Fly app `disruption-intelligence-db`    | official `postgis/postgis:16-3.5` image, 1GB volume, **no public IP** — only reachable over 6PN at `disruption-intelligence-db.internal:5432` |
+| Web                | Vercel project `lima-disruption-events` | static Vite build, SPA rewrites via `apps/web/vercel.json`                                                                                    |
+| Migrations + seed  | Fly `release_command`                   | programmatic drizzle-orm migrator (`packages/db/src/release-cli.ts`) runs before every deploy is promoted                                     |
 
 ### Deploying
 

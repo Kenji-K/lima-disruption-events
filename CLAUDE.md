@@ -30,6 +30,7 @@ docker compose up -d         # start local Postgres + PostGIS
 pnpm -F api dev              # run API in watch mode
 pnpm -F web dev              # run frontend in watch mode
 pnpm -F api ingest           # run scrapers once on demand
+pnpm -F api import-events f  # manual CSV/JSON event import (Ord. 1680 path)
 pnpm -F db generate          # generate Drizzle migration from schema diff
 pnpm -F db migrate           # apply migrations to local DB
 pnpm -F db seed              # idempotent reference-data seed
