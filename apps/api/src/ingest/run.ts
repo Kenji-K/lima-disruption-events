@@ -8,6 +8,7 @@ import { mmlScraper, MML_SOURCE_ID } from './mml-scraper';
 import { limaExpresaScraper, LIMA_EXPRESA_SOURCE_ID } from './lima-expresa-scraper';
 import { recurringEventsScraper, RECURRING_SOURCE_ID } from './recurring-events';
 import { createGobPeScraper, GOB_PE_INSTITUTIONS } from './gob-pe-scraper';
+import { joinnusScraper, JOINNUS_SOURCE_ID } from './joinnus-scraper';
 import { upsertEvents } from './upsert';
 import { runRoadAlertSyncOnce } from './sutran-alerts';
 import { cancelMissingEvents } from './sweep';
@@ -28,6 +29,7 @@ const SCRAPERS: Scraper[] = [
         name: `gob-pe-${inst}`,
         scrape: createGobPeScraper(inst),
     })),
+    { name: JOINNUS_SOURCE_ID, scrape: joinnusScraper },
 ];
 
 // `scrapers` is injectable for orchestration tests only; production callers
