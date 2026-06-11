@@ -72,7 +72,7 @@ export function parseImportFile(
     }
 
     const [header, ...rows] = parseCsv(content);
-    if (!header || header.join(',') !== CSV_COLUMNS.join(',')) {
+    if (header?.join(',') !== CSV_COLUMNS.join(',')) {
         throw new Error(
             `import: CSV header must be exactly "${CSV_COLUMNS.join(',')}" (got "${header?.join(',') ?? ''}")`,
         );

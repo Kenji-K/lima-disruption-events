@@ -13,6 +13,7 @@ import {
 } from '@disruption-intelligence/shared';
 import { upsertEvents } from '../../src/ingest/upsert';
 import { parseSutranAlerts, replaceRoadAlerts } from '../../src/ingest/sutran-alerts';
+import { recordFailure, recordSuccess } from '../../src/ingest/state';
 import { buildServer } from '../../src/server';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -232,6 +233,35 @@ describe('GET /events/:id', () => {
         const res = await app.inject({ method: 'GET', url: '/events/99999999999' });
         expect(res.statusCode).toBe(400);
         expect(res.body).not.toMatch(/select|Failed query/i);
+    });
+});
+
+describe('GET /sources', () => {
+    it('exposes per-source freshness from ingest_state (Tier-2 acceptance)', async () => {
+        await recordSuccess('freshness-test-source', { probe: true });
+        await recordFailure('failing-test-source', new Error('synthetic failure'));
+
+        const res = await app.inject({ method: 'GET', url: '/sources' });
+        expect(res.statusCode).toBe(200);
+        const body = res.json<
+            {
+                sourceId: string;
+                lastSuccessAt: string | null;
+                lastErrorAt: string | null;
+                lastError: string | null;
+                consecutiveFailures: number;
+            }[]
+        >();
+
+        const fresh = body.find((s) => s.sourceId === 'freshness-test-source');
+        expect(fresh).toBeDefined();
+        expect(fresh!.lastSuccessAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+        expect(fresh!.consecutiveFailures).toBe(0);
+
+        const failing = body.find((s) => s.sourceId === 'failing-test-source');
+        expect(failing!.lastError).toBe('synthetic failure');
+        expect(failing!.consecutiveFailures).toBe(1);
+        expect(failing!.lastSuccessAt).toBeNull();
     });
 });
 

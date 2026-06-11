@@ -38,6 +38,17 @@ export const eventIdParamsSchema = z.object({
     id: z.coerce.number().int().positive().max(2_147_483_647),
 });
 
+/** Per-source ingest freshness (ADR-007's ingest_state, Tier-2 visibility).
+ *  Ops-facing — not part of the web contract in @disruption-intelligence/shared. */
+export const sourceStatusSchema = z.object({
+    sourceId: z.string(),
+    lastRunAt: z.iso.datetime().nullable(),
+    lastSuccessAt: z.iso.datetime().nullable(),
+    lastErrorAt: z.iso.datetime().nullable(),
+    lastError: z.string().nullable(),
+    consecutiveFailures: z.number().int(),
+});
+
 export const healthzOkSchema = z.object({
     status: z.literal('ok'),
     db: z.literal('ok'),

@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { and, asc, eq, lte, sql } from 'drizzle-orm';
-import { db, events, roadAlerts } from '@disruption-intelligence/db';
+import { db, events, ingestState, roadAlerts } from '@disruption-intelligence/db';
 import {
     eventResponseSchema,
     eventsQuerySchema,
@@ -12,6 +12,7 @@ import {
     healthzDegradedSchema,
     notFoundSchema,
     roadAlertResponseSchema,
+    sourceStatusSchema,
     type EventResponse,
 } from './schemas';
 
@@ -137,6 +138,36 @@ export function registerRoutes(app: FastifyInstance): void {
                 .limit(limit);
 
             return rows.map(toEventResponse);
+        },
+    );
+
+    r.get(
+        '/sources',
+        {
+            schema: {
+                tags: ['system'],
+                summary: 'Per-source ingest freshness and failure state (ADR-007)',
+                response: { 200: z.array(sourceStatusSchema) },
+            },
+        },
+        async () => {
+            const rows = await db
+                .select({
+                    sourceId: ingestState.sourceId,
+                    lastRunAt: ingestState.lastRunAt,
+                    lastSuccessAt: ingestState.lastSuccessAt,
+                    lastErrorAt: ingestState.lastErrorAt,
+                    lastError: ingestState.lastError,
+                    consecutiveFailures: ingestState.consecutiveFailures,
+                })
+                .from(ingestState)
+                .orderBy(asc(ingestState.sourceId));
+            return rows.map((row) => ({
+                ...row,
+                lastRunAt: row.lastRunAt?.toISOString() ?? null,
+                lastSuccessAt: row.lastSuccessAt?.toISOString() ?? null,
+                lastErrorAt: row.lastErrorAt?.toISOString() ?? null,
+            }));
         },
     );
 
