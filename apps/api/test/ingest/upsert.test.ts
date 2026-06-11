@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
-import { scrapedEventSchema } from '@disruption-intelligence/shared';
+import { newsDedupKey, scrapedEventSchema } from '@disruption-intelligence/shared';
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
 import { upsertEvents } from '../../src/ingest/upsert';
 import { cancelMissingEvents } from '../../src/ingest/sweep';
@@ -50,7 +50,7 @@ describe('upsertEvents — happy path', () => {
     });
 
     it('inserts three events with correct counts', async () => {
-        expect(result).toEqual({ inserted: 3, updated: 0 });
+        expect(result).toEqual({ inserted: 3, updated: 0, suppressed: [] });
 
         const [countRow] = await db
             .select({ count: sql<number>`count(*)::int` })
@@ -143,8 +143,8 @@ describe('upsertEvents — idempotent re-run', () => {
     });
 
     it('reports inserts on first call and updates on second call', () => {
-        expect(firstResult).toEqual({ inserted: 3, updated: 0 });
-        expect(secondResult).toEqual({ inserted: 0, updated: 3 });
+        expect(firstResult).toEqual({ inserted: 3, updated: 0, suppressed: [] });
+        expect(secondResult).toEqual({ inserted: 0, updated: 3, suppressed: [] });
     });
 
     it('preserves ingested_at across re-runs', () => {
@@ -181,7 +181,7 @@ describe('upsertEvents — field propagation on conflict', () => {
             sourceUrl: 'https://example.com/prop',
         };
         const result = await upsertEvents([changed]);
-        expect(result).toEqual({ inserted: 0, updated: 1 });
+        expect(result).toEqual({ inserted: 0, updated: 1, suppressed: [] });
 
         const [row] = await db
             .select({
@@ -225,7 +225,7 @@ describe('upsertEvents — in-batch duplicate keys', () => {
         const second: ScrapedEvent = { ...first, title: 'Second occurrence' };
 
         const result = await upsertEvents([first, second]);
-        expect(result).toEqual({ inserted: 1, updated: 0 });
+        expect(result).toEqual({ inserted: 1, updated: 0, suppressed: [] });
 
         const [row] = await db
             .select({ title: events.title })
@@ -233,6 +233,137 @@ describe('upsertEvents — in-batch duplicate keys', () => {
             .where(eq(events.externalId, 'dup-001'));
         assert(row);
         expect(row.title).toBe('Second occurrence');
+    });
+});
+
+describe('upsertEvents — cross-channel dedup suppression (ADR-009)', () => {
+    // The real verified cross-channel pair (2026-06-11): same comunicado on
+    // munlima.gob.pe (WP, all-caps) and gob.pe munilima (sentence case).
+    const WP_TITLE =
+        'NUEVO CORREDOR DE LA VÍA EXPRESA GRAU ALCANZA 90 % DE AVANCE E INICIARÁ MARCHA BLANCA EN 60 DÍAS, ANUNCIA ALCALDE REGGIARDO';
+    const GOB_TITLE =
+        'Nuevo corredor de la Vía Expresa Grau alcanza 90 % de avance e iniciará marcha blanca en 60 días, anuncia alcalde Reggiardo';
+
+    const mmlCopy: ScrapedEvent = {
+        sourceId: 'mml',
+        externalId: '79116',
+        title: WP_TITLE,
+        category: 'road_work',
+        state: 'scheduled',
+        startAt: '2026-10-01T08:00:00-05:00',
+        sourcePayload: {},
+        sourceUrl:
+            'https://www.munlima.gob.pe/2026/04/30/nuevo-corredor-de-la-via-expresa-grau-alcanza-90-de-avance-e-iniciara-marcha-blanca-en-60-dias-anuncia-alcalde-reggiardo/',
+        dedupKey: newsDedupKey(WP_TITLE),
+    };
+    const gobCopy: ScrapedEvent = {
+        sourceId: 'gob-pe-munilima',
+        externalId: '1385665',
+        title: GOB_TITLE,
+        category: 'road_work',
+        state: 'scheduled',
+        // Cross-channel publication skew of days is normal (observed 1–5d);
+        // extracted start dates land close but not equal.
+        startAt: '2026-10-03T08:00:00-05:00',
+        sourcePayload: {},
+        sourceUrl:
+            'https://www.gob.pe/institucion/munilima/noticias/1385665-nuevo-corredor-de-la-via-expresa-grau-alcanza-90-de-avance-e-iniciara-marcha-blanca-en-60-dias-anuncia-alcalde-reggiardo',
+        dedupKey: newsDedupKey(GOB_TITLE),
+    };
+
+    it('suppresses the cross-source copy inside the ±14d window — one event row', async () => {
+        const first = await upsertEvents([mmlCopy]);
+        expect(first.inserted).toBe(1);
+        expect(first.suppressed).toEqual([]);
+
+        const second = await upsertEvents([gobCopy]);
+        expect(second).toEqual({
+            inserted: 0,
+            updated: 0,
+            suppressed: [
+                {
+                    dedupKey: mmlCopy.dedupKey,
+                    sourceId: 'gob-pe-munilima',
+                    sourceUrl: gobCopy.sourceUrl,
+                    existingSourceId: 'mml',
+                    existingSourceUrl: mmlCopy.sourceUrl,
+                },
+            ],
+        });
+
+        const rows = await db
+            .select({ sourceId: events.sourceId })
+            .from(events)
+            .where(eq(events.dedupKey, mmlCopy.dedupKey!));
+        expect(rows).toEqual([{ sourceId: 'mml' }]);
+    });
+
+    it('keeps suppressing on the mirror source re-poll (idempotent)', async () => {
+        const again = await upsertEvents([gobCopy]);
+        expect(again.inserted).toBe(0);
+        expect(again.suppressed).toHaveLength(1);
+    });
+
+    it('does not suppress same-source events sharing a dedupKey', async () => {
+        const TITLE = 'Cierre nocturno del óvalo Higuereta por mantenimiento';
+        const a: ScrapedEvent = {
+            ...mmlCopy,
+            sourceId: 'same-source-dedup',
+            externalId: 'ss-1',
+            title: TITLE,
+            dedupKey: newsDedupKey(TITLE),
+        };
+        const b: ScrapedEvent = {
+            ...mmlCopy,
+            sourceId: 'same-source-dedup',
+            externalId: 'ss-2',
+            title: TITLE,
+            dedupKey: newsDedupKey(TITLE),
+            startAt: '2026-10-02T08:00:00-05:00',
+        };
+        await upsertEvents([a]);
+        const result = await upsertEvents([b]);
+        expect(result.inserted).toBe(1);
+        expect(result.suppressed).toEqual([]);
+    });
+
+    it('does not suppress a recycled headline far outside the window', async () => {
+        const nextYear: ScrapedEvent = {
+            ...gobCopy,
+            externalId: 'recycled-1',
+            startAt: '2027-10-01T08:00:00-05:00',
+        };
+        const result = await upsertEvents([nextYear]);
+        expect(result.inserted).toBe(1);
+        expect(result.suppressed).toEqual([]);
+    });
+
+    it('propagates dedupKey through ON CONFLICT (retitled post re-keys)', async () => {
+        const original: ScrapedEvent = {
+            sourceId: 'rekey',
+            externalId: 'rk-1',
+            title: 'Cierre de la avenida Original',
+            category: 'road_closure',
+            state: 'scheduled',
+            startAt: '2026-11-01T08:00:00-05:00',
+            sourcePayload: {},
+            dedupKey: newsDedupKey('Cierre de la avenida Original'),
+        };
+        await upsertEvents([original]);
+        const retitled: ScrapedEvent = {
+            ...original,
+            title: 'Cierre de la avenida Renombrada',
+            dedupKey: newsDedupKey('Cierre de la avenida Renombrada'),
+        };
+        const result = await upsertEvents([retitled]);
+        expect(result.updated).toBe(1);
+
+        const [row] = await db
+            .select({ dedupKey: events.dedupKey })
+            .from(events)
+            .where(eq(events.externalId, 'rk-1'));
+        assert(row);
+        expect(row.dedupKey).toBe('cierre-de-la-avenida-renombrada');
     });
 });
 

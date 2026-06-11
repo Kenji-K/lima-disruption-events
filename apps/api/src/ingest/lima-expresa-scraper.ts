@@ -2,7 +2,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import type { Logger } from 'pino';
-import type { ScrapedEvent } from '@disruption-intelligence/shared';
+import { newsDedupKey, type ScrapedEvent } from '@disruption-intelligence/shared';
 import { fetchWithRetry } from './fetch';
 import { extractDateRange, normalize, toEndIso, toStartIso } from './extract-dates';
 import type { ScrapeResult } from './types';
@@ -134,6 +134,8 @@ export function parseNewsHtml(html: string, path: string, log?: Logger): Scraped
             arteries,
         },
         sourceUrl: `${ORIGIN}${path}`,
+        // ADR-009 cross-channel key.
+        ...(newsDedupKey(headline) ? { dedupKey: newsDedupKey(headline) } : {}),
     };
 }
 

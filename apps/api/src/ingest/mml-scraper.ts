@@ -2,7 +2,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import type { Logger } from 'pino';
-import type { ScrapedEvent } from '@disruption-intelligence/shared';
+import { newsDedupKey, type ScrapedEvent } from '@disruption-intelligence/shared';
 import { fetchWithRetry } from './fetch';
 import { extractDateRange, normalize, toEndIso, toStartIso } from './extract-dates';
 import type { ScrapeResult } from './types';
@@ -121,7 +121,9 @@ export function extractDisruptionEvent(post: WpPost, log?: Logger): ScrapedEvent
             matchedDate: range.raw,
             roadMentions: roadMentions.slice(0, 5),
         },
-        sourceUrl: post.link, // canonical URL — Tier-2 dedup join key per ADR-007
+        sourceUrl: post.link,
+        // ADR-009 cross-channel key (gob.pe's munilima channel mirrors these posts).
+        ...(newsDedupKey(title) ? { dedupKey: newsDedupKey(title) } : {}),
     };
 }
 

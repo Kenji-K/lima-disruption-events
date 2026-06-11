@@ -1,17 +1,72 @@
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
 import { db, events, regions } from '@disruption-intelligence/db';
-import { sql, and, eq } from 'drizzle-orm';
+import { sql, and, eq, inArray } from 'drizzle-orm';
+
+/** ADR-009: a cross-channel copy dropped at write time. Surfaced to the caller
+ *  (the run loop logs it) — the suppressed copy's URL lives nowhere else. */
+export type SuppressedDuplicate = {
+    dedupKey: string;
+    sourceId: string;
+    sourceUrl: string | null;
+    existingSourceId: string;
+    existingSourceUrl: string | null;
+};
+
+// ADR-009 date guard: wide enough for cross-channel publication/extraction skew
+// (observed ≤5 days), narrow enough to keep recycled annual headlines apart.
+const DEDUP_WINDOW_MS = 14 * 86_400_000;
 
 export async function upsertEvents(
     rows: ScrapedEvent[],
-): Promise<{ inserted: number; updated: number }> {
-    if (rows.length === 0) return { inserted: 0, updated: 0 };
+): Promise<{ inserted: number; updated: number; suppressed: SuppressedDuplicate[] }> {
+    if (rows.length === 0) return { inserted: 0, updated: 0, suppressed: [] };
 
     // One batch = one INSERT statement; a duplicate (sourceId, externalId) inside
     // it raises 21000 "cannot affect row a second time" and aborts the whole
     // source's ingest (GTN renders adjacent-month spillover cells, so cross-month
     // duplicates are plausible). Last wins — same as ON CONFLICT across batches.
-    const deduped = [...new Map(rows.map((r) => [`${r.sourceId}:${r.externalId}`, r])).values()];
+    const inBatchDeduped = [
+        ...new Map(rows.map((r) => [`${r.sourceId}:${r.externalId}`, r])).values(),
+    ];
+
+    // ADR-009 cross-channel suppression: an incoming news event whose dedupKey
+    // already exists under ANOTHER source with a nearby startAt is the same
+    // comunicado republished — first channel wins, the copy is dropped here.
+    const keys = [...new Set(inBatchDeduped.flatMap((r) => (r.dedupKey ? [r.dedupKey] : [])))];
+    const suppressed: SuppressedDuplicate[] = [];
+    let deduped = inBatchDeduped;
+    if (keys.length > 0) {
+        const existing = await db
+            .select({
+                sourceId: events.sourceId,
+                sourceUrl: events.sourceUrl,
+                dedupKey: events.dedupKey,
+                startAt: events.startAt,
+            })
+            .from(events)
+            .where(inArray(events.dedupKey, keys));
+
+        deduped = inBatchDeduped.filter((r) => {
+            if (!r.dedupKey) return true;
+            const match = existing.find(
+                (e) =>
+                    e.dedupKey === r.dedupKey &&
+                    e.sourceId !== r.sourceId &&
+                    Math.abs(e.startAt.getTime() - new Date(r.startAt).getTime()) <=
+                        DEDUP_WINDOW_MS,
+            );
+            if (!match) return true;
+            suppressed.push({
+                dedupKey: r.dedupKey,
+                sourceId: r.sourceId,
+                sourceUrl: r.sourceUrl ?? null,
+                existingSourceId: match.sourceId,
+                existingSourceUrl: match.sourceUrl,
+            });
+            return false;
+        });
+    }
+    if (deduped.length === 0) return { inserted: 0, updated: 0, suppressed };
 
     // Lima level-1 region — the single FK target for v0 scrapers (GTN +
     // futbolperuano's three Lima clubs all resolve here). Per ADR-005,
@@ -42,6 +97,7 @@ export async function upsertEvents(
             : null,
         sourcePayload: r.sourcePayload,
         sourceUrl: r.sourceUrl ?? null,
+        dedupKey: r.dedupKey ?? null,
     }));
 
     const result = await db
@@ -58,6 +114,7 @@ export async function upsertEvents(
                 location: sql`excluded.location`,
                 sourcePayload: sql`excluded.source_payload`,
                 sourceUrl: sql`excluded.source_url`,
+                dedupKey: sql`excluded.dedup_key`,
                 updatedAt: sql`now()`,
             },
         })
@@ -65,5 +122,5 @@ export async function upsertEvents(
 
     const inserted = result.filter((r) => r.inserted).length;
     const updated = deduped.length - inserted;
-    return { inserted, updated };
+    return { inserted, updated, suppressed };
 }

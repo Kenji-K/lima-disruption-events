@@ -32,6 +32,7 @@ export async function runIngestOnce(log: Logger, scrapers: Scraper[] = SCRAPERS)
     let inserted = 0;
     let updated = 0;
     let cancelled = 0;
+    let suppressed = 0;
     const failedSources: string[] = [];
 
     // Per-source isolation: scrape → validate → upsert → sweep per scraper, so one
@@ -44,6 +45,11 @@ export async function runIngestOnce(log: Logger, scrapers: Scraper[] = SCRAPERS)
             const counts = await upsertEvents(validated);
             inserted += counts.inserted;
             updated += counts.updated;
+            suppressed += counts.suppressed.length;
+            // The suppressed copy's URL exists nowhere but this log line (ADR-009).
+            for (const dup of counts.suppressed) {
+                runLog.info({ source: name, ...dup }, 'cross-channel duplicate suppressed');
+            }
 
             // Marker sweep (ADR-003): events the source no longer lists were removed
             // or rescheduled upstream. Gated on full window coverage AND a non-empty
@@ -84,5 +90,8 @@ export async function runIngestOnce(log: Logger, scrapers: Scraper[] = SCRAPERS)
     }
 
     const durationMs = Date.now() - startedAt;
-    runLog.info({ inserted, updated, cancelled, failedSources, durationMs }, 'ingest run complete');
+    runLog.info(
+        { inserted, updated, cancelled, suppressed, failedSources, durationMs },
+        'ingest run complete',
+    );
 }

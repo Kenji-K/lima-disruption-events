@@ -57,6 +57,10 @@ describe('parseNewsHtml — live fixtures', () => {
         // "02 de junio de 2026" extracted from the body text.
         expect(event!.startAt).toBe('2026-06-02T00:00:00-05:00');
         expect(event!.sourceUrl).toBe(`https://prensa.limaexpresa.pe${cierrePath}`);
+        // ADR-009: every news-derived event carries the cross-channel key.
+        expect(event!.dedupKey).toBe(
+            'lima-expresa-realiza-cierre-parcial-en-la-via-de-evitamiento-por-siniestro-vehicular',
+        );
         const payload = event!.sourcePayload as { arteries: string[] };
         expect(payload.arteries).toContain('Vía de Evitamiento');
     });

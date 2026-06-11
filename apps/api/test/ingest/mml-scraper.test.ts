@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { scrapedEventSchema } from '@disruption-intelligence/shared';
+import { newsDedupKey, scrapedEventSchema } from '@disruption-intelligence/shared';
 import { extractDateRange } from '../../src/ingest/extract-dates';
 import { extractDisruptionEvent, parseMmlPostsJson } from '../../src/ingest/mml-scraper';
 
@@ -50,6 +50,9 @@ describe('extractDisruptionEvent — live fixtures', () => {
             expect(event.sourceId).toBe('mml');
             expect(event.category).toBe('road_closure');
             expect(event.sourceUrl).toMatch(/^https:\/\/www\.munlima\.gob\.pe\//);
+            // ADR-009: every news-derived event carries the cross-channel key.
+            expect(event.dedupKey).toBe(newsDedupKey(event.title));
+            expect(event.dedupKey).toMatch(/^[a-z0-9][a-z0-9-]*$/);
         }
     });
 
