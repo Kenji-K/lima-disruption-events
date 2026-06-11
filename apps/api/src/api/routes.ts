@@ -2,7 +2,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, lte, sql } from 'drizzle-orm';
 import { db, events } from '@disruption-intelligence/db';
 import {
     eventResponseSchema,
@@ -111,8 +111,19 @@ export function registerRoutes(app: FastifyInstance): void {
         async (req) => {
             const { from, to, category, source, limit } = req.query;
             const conditions = [];
-            // Time-range predicate on start_at — the query path ADR-001's BRIN serves.
-            if (from) conditions.push(gte(events.startAt, new Date(from)));
+            // Overlap semantics: an event matches [from, to] when its own interval
+            // [start_at, end_at ?? start_at] intersects the window — a multi-day
+            // closure that began before `from` is still in effect. COALESCE (not
+            // `end_at IS NULL OR …`) so endAt-less events are instants, keeping
+            // past point events out. The `to` bound stays on start_at, which is
+            // the half ADR-001's BRIN can serve.
+            // Bound as ISO string, not Date: with a raw fragment on the left,
+            // Drizzle skips the column's Date mapper and postgres.js can't
+            // serialize a bare Date param.
+            if (from)
+                conditions.push(
+                    sql`COALESCE(${events.endAt}, ${events.startAt}) >= ${new Date(from).toISOString()}::timestamptz`,
+                );
             if (to) conditions.push(lte(events.startAt, new Date(to)));
             if (category) conditions.push(eq(events.category, category));
             if (source) conditions.push(eq(events.sourceId, source));

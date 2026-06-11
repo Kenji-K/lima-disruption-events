@@ -11,7 +11,9 @@ export const eventsQuerySchema = z.object({
     from: z.iso
         .datetime({ offset: true })
         .optional()
-        .describe('Only events starting at or after this instant (ISO-8601 with offset)'),
+        .describe(
+            'Only events still in effect at or after this instant — an event matches if it ends (or starts, when it has no end) at/after it (ISO-8601 with offset)',
+        ),
     to: z.iso
         .datetime({ offset: true })
         .optional()

@@ -58,6 +58,16 @@ const fixtures: ScrapedEvent[] = [
         startAt: '2026-07-10T08:00:00-05:00',
         sourcePayload: { fixture: true },
     },
+    {
+        sourceId: 'api-test-2',
+        externalId: 'e4',
+        title: 'Obra D',
+        category: 'road_work',
+        state: 'scheduled',
+        startAt: '2026-07-02T08:00:00-05:00',
+        endAt: '2026-07-09T18:00:00-05:00',
+        sourcePayload: { fixture: true },
+    },
 ];
 
 let app: FastifyInstance;
@@ -93,14 +103,21 @@ describe('GET /events', () => {
         const res = await app.inject({ method: 'GET', url: '/events' });
         expect(res.statusCode).toBe(200);
         const body = res.json<ApiEvent[]>();
-        expect(body).toHaveLength(3);
-        expect(body.map((e) => e.title)).toEqual(['Concierto A', 'Partido B', 'Cierre C']);
+        expect(body).toHaveLength(4);
+        expect(body.map((e) => e.title)).toEqual([
+            'Concierto A',
+            'Obra D',
+            'Partido B',
+            'Cierre C',
+        ]);
     });
 
     it('serializes location to {lng, lat} and missing endAt/location to null', async () => {
         const res = await app.inject({ method: 'GET', url: '/events' });
-        const [concierto, partido] = res.json<ApiEvent[]>();
-        if (!concierto || !partido) throw new Error('expected at least two events');
+        const body = res.json<ApiEvent[]>();
+        const concierto = body.find((e) => e.title === 'Concierto A');
+        const partido = body.find((e) => e.title === 'Partido B');
+        if (!concierto || !partido) throw new Error('expected Concierto A and Partido B');
         expect(concierto.location?.lng).toBeCloseTo(-77.0339, 4);
         expect(concierto.location?.lat).toBeCloseTo(-12.0683, 4);
         expect(concierto.startAt).toBe('2026-07-02T01:00:00.000Z');
@@ -111,15 +128,28 @@ describe('GET /events', () => {
         expect(partido.sourceUrl).toBeNull();
     });
 
-    it('filters by time range on startAt (from/to)', async () => {
+    it('matches events overlapping the from/to window, not just those starting in it', async () => {
+        // Obra D runs Jul 2 → Jul 9: it straddles the window and must appear.
+        // Concierto A (point-in-time Jul 1, ended) must not.
         const res = await app.inject({
             method: 'GET',
             url: '/events',
             query: { from: '2026-07-04T00:00:00-05:00', to: '2026-07-06T00:00:00-05:00' },
         });
         const body = res.json<ApiEvent[]>();
-        expect(body).toHaveLength(1);
-        expect(body[0]?.title).toBe('Partido B');
+        expect(body.map((e) => e.title)).toEqual(['Obra D', 'Partido B']);
+    });
+
+    it('treats endAt-less events as instants: from alone excludes past point events', async () => {
+        // from = Jul 8: Obra D (ends Jul 9) and Cierre C (starts Jul 10) qualify;
+        // Concierto A and Partido B are already over.
+        const res = await app.inject({
+            method: 'GET',
+            url: '/events',
+            query: { from: '2026-07-08T00:00:00-05:00' },
+        });
+        const body = res.json<ApiEvent[]>();
+        expect(body.map((e) => e.title)).toEqual(['Obra D', 'Cierre C']);
     });
 
     it('filters by category', async () => {
@@ -137,7 +167,7 @@ describe('GET /events', () => {
             url: '/events',
             query: { source: 'api-test-2' },
         });
-        expect(res.json<ApiEvent[]>().map((e) => e.externalId)).toEqual(['e3']);
+        expect(res.json<ApiEvent[]>().map((e) => e.externalId)).toEqual(['e4', 'e3']);
     });
 
     it('respects limit', async () => {
