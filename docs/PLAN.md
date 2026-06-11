@@ -83,7 +83,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Branch:** `main`. Local and `origin/main` are in sync at the sync point below. For the authoritative since-Initial commit list, run `git log --oneline 4ae7626..HEAD`.
 
-**Last sync point:** `b0ab6f4 chore: lint/format pass — root test script, fixture prettierignore, type cleanups`. This is HEAD as of the commit immediately before this PLAN.md update (the Tier-0 session: fetchWithRetry extraction → futbolperuano scraper → GTN venue point → Fastify API → web frontend → lint pass). If `git log b0ab6f4..HEAD` shows commits other than the Tier-0 wrap-up docs commit, work has landed since the last sync — read those commits before trusting "Next move."
+**Last sync point:** `42e4f9f docs: record review backlog in PLAN.md + root typecheck command`. HEAD as of this update; covers the Tier-0 build session (commits up to the `87e8a5b` wrap-up) plus the same-day five-lens architectural review and its pre-deploy fix batch (`f3f26cd` API error sanitization/rate-limit/healthz-timeout, `abd8901` sourceUrl http(s) guard, `abf7bcc` ingest lifecycle sweep + empty-vs-broken rules + batch dedupe + pacing, `4a37fd1` web vercel.json + prod-strict env). 56/56 tests, typecheck/lint/format clean, live ingest verified post-fix. If `git log 42e4f9f..HEAD` shows commits beyond this sync-bump, read them before trusting "Next move."
 
 **Local stack running:**
 
@@ -110,7 +110,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
   - `test/` — 44 tests / 4 files: fixture-driven parser tests for both scrapers (no Postgres), Testcontainers pipeline + API integration tests (each vitest fork gets its own container via `test/setup.ts` top-level await). `pnpm test` at the root runs everything.
 - `apps/web` — Vite 8 + React 19 + Tailwind 4 + MapLibre GL + TanStack Query + react-router 7. Filter bar (date range / category / source, held in URL search params), sidebar list, OpenFreeMap map with per-venue grouped markers (count badge + event-picker popup, popup DOM built via `textContent` so scraped titles never reach `innerHTML`), detail drawer at `/eventos/:id` (map eases center under drawer-width padding on open, back on close). UI text es-PE with `America/Lima` Intl formatting. API responses Zod-validated against `apiEventSchema` at the fetch boundary.
 
-**Uncommitted work in tree:** none — tree is clean as of `b0ab6f4`; this PLAN.md/ARCHITECTURE.md update ships as the Tier-0 wrap-up docs commit.
+**Uncommitted work in tree:** none — tree is clean as of the sync point above.
 
 ---
 
