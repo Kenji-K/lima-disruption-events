@@ -9,6 +9,7 @@ import { limaExpresaScraper, LIMA_EXPRESA_SOURCE_ID } from './lima-expresa-scrap
 import { recurringEventsScraper, RECURRING_SOURCE_ID } from './recurring-events';
 import { createGobPeScraper, GOB_PE_INSTITUTIONS } from './gob-pe-scraper';
 import { joinnusScraper, JOINNUS_SOURCE_ID } from './joinnus-scraper';
+import { costa21Scraper, COSTA21_SOURCE_ID } from './costa21-scraper';
 import { upsertEvents } from './upsert';
 import { runRoadAlertSyncOnce } from './sutran-alerts';
 import { cancelMissingEvents } from './sweep';
@@ -30,6 +31,7 @@ const SCRAPERS: Scraper[] = [
         scrape: createGobPeScraper(inst),
     })),
     { name: JOINNUS_SOURCE_ID, scrape: joinnusScraper },
+    { name: COSTA21_SOURCE_ID, scrape: costa21Scraper },
 ];
 
 // `scrapers` is injectable for orchestration tests only; production callers
