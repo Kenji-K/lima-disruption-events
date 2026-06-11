@@ -5,6 +5,7 @@ import { buildServer } from './server';
 import { env } from './env';
 import { log } from './log';
 import { createIngestTask, createRoadAlertTask } from './ingest/schedule';
+import { runRoadAlertSyncOnce } from './ingest/sutran-alerts';
 
 const app = await buildServer(log, { exposeGatedSources: env.EXPOSE_GATED_SOURCES });
 if (env.EXPOSE_GATED_SOURCES) {
@@ -26,6 +27,11 @@ app.addHook('onClose', async () => {
 });
 
 await app.listen({ port: env.PORT, host: env.HOST });
+
+// Warm the road-alert mirror at boot: deploys replace the machine and can
+// straddle the 2-hourly tick, leaving the snapshot empty/stale until the next
+// one (observed on 2026-06-11). Fire-and-forget; never throws (ADR-010).
+void runRoadAlertSyncOnce(log);
 
 async function shutdown(signal: string): Promise<void> {
     log.info({ signal }, 'api shutting down');
