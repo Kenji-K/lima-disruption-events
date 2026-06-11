@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { pino } from 'pino';
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
 import { db, ingestState } from '@disruption-intelligence/db';
-import { runIngestOnce } from '../../src/ingest/run';
+import { runFirstRunCatchUp, runIngestOnce } from '../../src/ingest/run';
 import { getCursor, recordFailure, recordSuccess } from '../../src/ingest/state';
 import type { Scraper } from '../../src/ingest/types';
 
@@ -141,5 +141,38 @@ describe('runIngestOnce cursor wiring (ADR-007)', () => {
 
         expect((await stateRow('wire-pair-fail'))?.consecutiveFailures).toBe(1);
         expect(await getCursor('wire-pair-ok')).toEqual({ after: 'ok' });
+    });
+});
+
+describe('runFirstRunCatchUp — boot catch-up for never-run sources', () => {
+    const stub = (name: string, calls: string[]): Scraper => ({
+        name,
+        scrape: () => {
+            calls.push(name);
+            return Promise.resolve({
+                events: [validEvent(name, `${name}-1`)],
+                sweepWindowEnd: null,
+            });
+        },
+    });
+
+    it('runs only the sources with no ingest_state row, then records them', async () => {
+        const calls: string[] = [];
+        await recordSuccess('catchup-known', undefined);
+
+        await runFirstRunCatchUp(silentLog, [
+            stub('catchup-known', calls),
+            stub('catchup-new', calls),
+        ]);
+
+        expect(calls).toEqual(['catchup-new']);
+        const row = await stateRow('catchup-new');
+        expect(row?.lastSuccessAt).toBeInstanceOf(Date);
+    });
+
+    it('is a no-op when every source has state', async () => {
+        const calls: string[] = [];
+        await runFirstRunCatchUp(silentLog, [stub('catchup-known', calls)]);
+        expect(calls).toEqual([]);
     });
 });

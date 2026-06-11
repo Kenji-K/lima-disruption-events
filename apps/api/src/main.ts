@@ -5,6 +5,7 @@ import { buildServer } from './server';
 import { env } from './env';
 import { log } from './log';
 import { createIngestTask, createRoadAlertTask } from './ingest/schedule';
+import { runFirstRunCatchUp } from './ingest/run';
 import { runRoadAlertSyncOnce } from './ingest/sutran-alerts';
 
 const app = await buildServer(log, { exposeGatedSources: env.EXPOSE_GATED_SOURCES });
@@ -32,6 +33,12 @@ await app.listen({ port: env.PORT, host: env.HOST });
 // straddle the 2-hourly tick, leaving the snapshot empty/stale until the next
 // one (observed on 2026-06-11). Fire-and-forget; never throws (ADR-010).
 void runRoadAlertSyncOnce(log);
+// First-run catch-up: sources introduced by this deploy ingest now instead of
+// waiting for the next daily tick (one extra alert re-sync on such boots —
+// runIngestOnce ends with one; harmless, idempotent).
+runFirstRunCatchUp(log).catch((err: unknown) => {
+    log.error({ err }, 'boot first-run catch-up failed — next daily tick covers it');
+});
 
 async function shutdown(signal: string): Promise<void> {
     log.info({ signal }, 'api shutting down');

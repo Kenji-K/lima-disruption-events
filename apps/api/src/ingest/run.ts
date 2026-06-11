@@ -13,7 +13,7 @@ import { costa21Scraper, COSTA21_SOURCE_ID } from './costa21-scraper';
 import { upsertEvents } from './upsert';
 import { runRoadAlertSyncOnce } from './sutran-alerts';
 import { cancelMissingEvents } from './sweep';
-import { getCursor, recordFailure, recordSuccess } from './state';
+import { getCursor, listKnownSourceIds, recordFailure, recordSuccess } from './state';
 import type { Scraper } from './types';
 
 // `name` doubles as the sweep's sourceId filter — it must equal the SOURCE_ID
@@ -33,6 +33,27 @@ const SCRAPERS: Scraper[] = [
     { name: JOINNUS_SOURCE_ID, scrape: joinnusScraper },
     { name: COSTA21_SOURCE_ID, scrape: costa21Scraper },
 ];
+
+/** Boot catch-up: a source registered but never run in this environment (no
+ *  ingest_state row) would otherwise sit dataless until the next daily tick —
+ *  up to 24h after the deploy that introduced it. Runs exactly those sources
+ *  once; one first run per source per environment, so repeated deploys add no
+ *  load (same politeness profile as the README's manual warm-up). Also closes
+ *  the /sources blind spot where a new source is indistinguishable from a
+ *  nonexistent one. */
+export async function runFirstRunCatchUp(
+    log: Logger,
+    scrapers: Scraper[] = SCRAPERS,
+): Promise<void> {
+    const known = await listKnownSourceIds();
+    const neverRun = scrapers.filter((s) => !known.has(s.name));
+    if (neverRun.length === 0) return;
+    log.warn(
+        { sources: neverRun.map((s) => s.name) },
+        'boot catch-up: sources never ingested in this environment — running them now',
+    );
+    await runIngestOnce(log, neverRun);
+}
 
 // `scrapers` is injectable for orchestration tests only; production callers
 // never pass it.

@@ -5,6 +5,12 @@ import { db, ingestState } from '@disruption-intelligence/db';
  *  tracking. The runner owns all writes; scrapers only compute cursor values.
  *  Rows appear lazily on a source's first recorded run. */
 
+/** Source ids that have at least one recorded run in this environment. */
+export async function listKnownSourceIds(): Promise<Set<string>> {
+    const rows = await db.select({ sourceId: ingestState.sourceId }).from(ingestState);
+    return new Set(rows.map((r) => r.sourceId));
+}
+
 export async function getCursor(sourceId: string): Promise<unknown> {
     const rows = await db
         .select({ cursor: ingestState.cursor })
