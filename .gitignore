@@ -40,3 +40,4 @@ mockup/
 
 # Vercel CLI artifacts
 .vercel/
+.playwright-mcp/

@@ -1,0 +1,622 @@
+﻿{
+    "normal": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -76.15396522,
+                    -10.24112153
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "5",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO NORMAL",
+                "fecha_evento": "09\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "HUANUCO\/AMBO\/SAN RAFAEL",
+                "afectacion": "KM 195",
+                "evento": "VIA LIBRE Y TRANSITABLE",
+                "latitud": "-10.24112153",
+                "longitud": "-76.15396522",
+                "_sort_": "-10.24112153+-76.15396522",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "DESPRCAR HUANUCO",
+                "motivo": "CLIMATOLOGICO",
+                "codigo_via": "PE-3N",
+                "nombre_carretera": "CARRETERA LONGITUDINAL DE LA SIERRA NORTE",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -77.9299836,
+                    -10.44136182
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "19",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO NORMAL",
+                "fecha_evento": "09\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "ANCASH\/HUARMEY\/HUARMEY",
+                "afectacion": "KM 240",
+                "evento": "VIA LIBRE Y TRANSITABLE",
+                "latitud": "-10.44136182",
+                "longitud": "-77.9299836",
+                "_sort_": "-10.44136182+-77.9299836",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "CONCESIONARIA DE LA VIA",
+                "motivo": "ACCIDENTES",
+                "codigo_via": "PE-1N",
+                "nombre_carretera": "CARRETERA LONGITUDINAL DE LA COSTA NORTE",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -76.731546,
+                    -11.576027
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "10",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO NORMAL",
+                "fecha_evento": "08\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "LIMA\/CANTA\/SAN ROSA DE QUIVES",
+                "afectacion": "KM 72 +180",
+                "evento": "CAIDA DE CRAGA DE UN SEMITRAILER",
+                "latitud": "-11.576027",
+                "longitud": "-76.731546",
+                "_sort_": "-11.576027+-76.731546",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "PNP",
+                "motivo": "ACCIDENTES",
+                "codigo_via": "PE-20A",
+                "nombre_carretera": "CARRETERA TRAPICHE - CANTA - HUAYLLAY - VICCO",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -76.2685324,
+                    -11.7104692
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "11",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO NORMAL",
+                "fecha_evento": "08\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "LIMA\/HUAROCHIRI\/CHICLA",
+                "afectacion": "KM 105",
+                "evento": "DESPISTE Y VOLCADURA DE UN REMOLCADOR",
+                "latitud": "-11.7104692",
+                "longitud": "-76.2685324",
+                "_sort_": "-11.7104692+-76.2685324",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "CONCESIONARIA DE LA VIA",
+                "motivo": "ACCIDENTES",
+                "codigo_via": "PE-22",
+                "nombre_carretera": "CARRETERA CENTRAL",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -76.290008,
+                    -11.7457021
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "12",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO NORMAL",
+                "fecha_evento": "06\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "LIMA\/HUAROCHIRI\/SAN MATEO",
+                "afectacion": "KM 96",
+                "evento": "VIA LIBRE Y TRANSITABLE",
+                "latitud": "-11.7457021",
+                "longitud": "-76.290008",
+                "_sort_": "-11.7457021+-76.290008",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "CONCESIONARIA DE LA VIA",
+                "motivo": "ACCIDENTES",
+                "codigo_via": "PE-22",
+                "nombre_carretera": "CARRETERA CENTRAL",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -76.3344712,
+                    -11.7875358
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "13",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO NORMAL",
+                "fecha_evento": "08\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "LIMA\/HUAROCHIRI\/SAN MATEO",
+                "afectacion": "KM 85",
+                "evento": "CAIDA DE CRAGA DE UN SEMITRAILER",
+                "latitud": "-11.7875358",
+                "longitud": "-76.3344712",
+                "_sort_": "-11.7875358+-76.3344712",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "CONCESIONARIA DE LA VIA",
+                "motivo": "ACCIDENTES",
+                "codigo_via": "PE-22",
+                "nombre_carretera": "CARRETERA CENTRAL",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -77.01053236,
+                    -12.03549615
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "15",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO NORMAL",
+                "fecha_evento": "06\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "LIMA\/LIMA\/RIMAC",
+                "afectacion": "KM 06",
+                "evento": "VIA LIBRE Y TRANSITABLE",
+                "latitud": "-12.03549615",
+                "longitud": "-77.01053236",
+                "_sort_": "-12.03549615+-77.01053236",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "CONCESIONARIA DE LA VIA",
+                "motivo": "ACCIDENTES",
+                "codigo_via": "PE-1N",
+                "nombre_carretera": "CARRETERA LONGITUDINAL DE LA COSTA NORTE",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -73.443778,
+                    -16.284306
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "3",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO NORMAL",
+                "fecha_evento": "08\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "AREQUIPA\/CARAVELI\/ATICO",
+                "afectacion": "KM 729",
+                "evento": "VIA LIBRE Y TRANSITABLE",
+                "latitud": "-16.284306",
+                "longitud": "-73.443778",
+                "_sort_": "-16.284306+-73.443778",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "PNP",
+                "motivo": "CLIMATOLOGICO",
+                "codigo_via": "PE-1S",
+                "nombre_carretera": "CARRETERA LONGITUDINAL DE LA COSTA SUR",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -78.482215,
+                    -7.256571
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "18",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO NORMAL",
+                "fecha_evento": "09\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "CAJAMARCA\/CAJAMARCA\/SAN JUAN",
+                "afectacion": "KM 155 + 650",
+                "evento": "ACCIDENTE DE TRANSITO",
+                "latitud": "-7.256571",
+                "longitud": "-78.482215",
+                "_sort_": "-7.256571+-78.482215",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "CONCESIONARIA DE LA VIA",
+                "motivo": "ACCIDENTES",
+                "codigo_via": "PE-08",
+                "nombre_carretera": "CARRETERA PACASMAYO - CHILETE - CAJAMARCA",
+                "alerta_activa_24_horas": "SI"
+            }
+        }
+    ],
+    "restringido": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -76.17638684,
+                    -10.62201365
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "16",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO RESTRINGIDO",
+                "fecha_evento": "22\/02\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "PASCO\/PASCO\/YANACANCHA",
+                "afectacion": "KM 145",
+                "evento": "TRABAJOS DE MANTENIMIENTO DE LA CARRETERA",
+                "latitud": "-10.62201365",
+                "longitud": "-76.17638684",
+                "_sort_": "-10.62201365+-76.17638684",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "PNP",
+                "motivo": "INFRAESTRUCTURA",
+                "codigo_via": "PE-3N",
+                "nombre_carretera": "CARRETERA LONGITUDINAL DE LA SIERRA NORTE",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -76.664701,
+                    -11.502096
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "9",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO RESTRINGIDO",
+                "fecha_evento": "24\/03\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "LIMA\/CANTA\/SAN BUENAVENTURA",
+                "afectacion": "KM 84+780 AL KM 85+130",
+                "evento": "TRABAJOS DE MANTENIMIENTO DE LA CARRETERA",
+                "latitud": "-11.502096",
+                "longitud": "-76.664701",
+                "_sort_": "-11.502096+-76.664701",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "PROVIAS NACIONAL",
+                "motivo": "INFRAESTRUCTURA",
+                "codigo_via": "PE-20A",
+                "nombre_carretera": "CARRETERA TRAPICHE - CANTA - HUAYLLAY - VICCO",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -76.9232690423,
+                    -12.0281550558
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "14",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO RESTRINGIDO",
+                "fecha_evento": "04\/03\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "LIMA\/LIMA\/ATE",
+                "afectacion": "KM 7+500",
+                "evento": "AVANCE DE OBRAS DE INFRAESTRUCTURA",
+                "latitud": "-12.0281550558",
+                "longitud": "-76.9232690423",
+                "_sort_": "-12.0281550558+-76.9232690423",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "PNP",
+                "motivo": "INFRAESTRUCTURA",
+                "codigo_via": "PE-22",
+                "nombre_carretera": "CARRETERA CENTRAL",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -73.257828,
+                    -16.388786
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "2",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO RESTRINGIDO",
+                "fecha_evento": "13\/05\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "AREQUIPA\/CAMANA\/OCO\u00d1A",
+                "afectacion": "KM 756 + 350",
+                "evento": "PERDIDA DE PLATAFORMA",
+                "latitud": "-16.388786",
+                "longitud": "-73.257828",
+                "_sort_": "-16.388786+-73.257828",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "PROVIAS NACIONAL",
+                "motivo": "INFRAESTRUCTURA",
+                "codigo_via": "PE-1S",
+                "nombre_carretera": "CARRETERA LONGITUDINAL DE LA COSTA SUR",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -77.840238,
+                    -7.648566
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "8",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO RESTRINGIDO",
+                "fecha_evento": "29\/03\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "LA LIBERTAD\/SANCHEZ CARRION\/CHUGAY",
+                "afectacion": "KM 38+320 - KM 38+350",
+                "evento": "PERDIDA DE PLATAFORMA",
+                "latitud": "-7.648566",
+                "longitud": "-77.840238",
+                "_sort_": "-7.648566+-77.840238",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "COE MTC",
+                "motivo": "INFRAESTRUCTURA",
+                "codigo_via": "PE-10B",
+                "nombre_carretera": "CARRETERA HUAMACHUCO - BAMBAMARCA - JUANJUI",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -78.645503,
+                    -7.97749
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "7",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO RESTRINGIDO",
+                "fecha_evento": "03\/04\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "LA LIBERTAD\/OTUZCO\/SALPO",
+                "afectacion": "KM 57 + 645",
+                "evento": "MANTENIMIENTO DEL PUENTE CASMICHE",
+                "latitud": "-7.97749",
+                "longitud": "-78.645503",
+                "_sort_": "-7.97749+-78.645503",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "CONCESIONARIA DE LA VIA",
+                "motivo": "INFRAESTRUCTURA",
+                "codigo_via": "PE-10A",
+                "nombre_carretera": "CARRETERA TRUJILLO - AGALLPAMPA - QUIRUVILCA",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -76.77420259,
+                    -8.64534066
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "6",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO RESTRINGIDO",
+                "fecha_evento": "13\/04\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "HUANUCO\/MARA\u00d1ON\/CHOLON",
+                "afectacion": "KM 258",
+                "evento": "ASENTAMIENTO DE LA PLATAFORMA TRAS LAS INTENSAS LLUVIAS",
+                "latitud": "-8.64534066",
+                "longitud": "-76.77420259",
+                "_sort_": "-8.64534066+-76.77420259",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "PROVIAS NACIONAL",
+                "motivo": "INFRAESTRUCTURA",
+                "codigo_via": "PE-12A",
+                "nombre_carretera": "CARRETERA LA PAMPA - CUSCA - SIHUAS - HUACRACHUCO - UCHIZA",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -75.197421,
+                    -8.834261
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "17",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO RESTRINGIDO",
+                "fecha_evento": "05\/06\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "UCAYALI\/PADRE ABAD\/IRAZOLA",
+                "afectacion": "KM 351+370",
+                "evento": "EROSION EN PLATAFORMA DEBIDO A LLUVIAS INTENSAS EN LA ZONA",
+                "latitud": "-8.834261",
+                "longitud": "-75.197421",
+                "_sort_": "-8.834261+-75.197421",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "PROVIAS NACIONAL",
+                "motivo": "CLIMATOLOGICO",
+                "codigo_via": "PE-5N",
+                "nombre_carretera": "CARRETERA LONGITUDINAL DE LA SELVA NORTE",
+                "alerta_activa_24_horas": "SI"
+            }
+        }
+    ],
+    "interrumpido": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -77.1301,
+                    -11.8542
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "4",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO INTERRUMPIDO",
+                "fecha_evento": "28\/04\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "CALLAO\/CALLAO\/MI PERU",
+                "afectacion": "KM 03",
+                "evento": "PERDIDA DE LA CALZADA",
+                "latitud": "-11.8542",
+                "longitud": "-77.1301",
+                "_sort_": "-11.8542+-77.1301",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "PROVIAS NACIONAL",
+                "motivo": "INFRAESTRUCTURA",
+                "codigo_via": "PE-20",
+                "nombre_carretera": "CARRETERA VENTANILLA - GAMBETA - CALLAO",
+                "alerta_activa_24_horas": "SI"
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [
+                    -78.136795,
+                    -4.765768
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "item": "1",
+                "visualizacion_": "SI",
+                "tipo_alerta_": "VIGENTE",
+                "estado": "TRANSITO INTERRUMPIDO",
+                "fecha_evento": "26\/05\/2026",
+                "fecha_actualizacion": "11\/06\/2026 10:30 HORAS",
+                "ubigeo": "AMAZONAS\/CONDORCANQUI\/NIEVA",
+                "afectacion": "KM 35+360",
+                "evento": "TRAZO Y REPLANTEO",
+                "latitud": "-4.765768",
+                "longitud": "-78.136795",
+                "_sort_": "-4.765768+-78.136795",
+                "_fecha_actualizacion_": "2026 10:30 HORAS+06+11+10:30",
+                "cant_vehiculos_detenidos_pasajeros": "0",
+                "cant_vehiculos_detenidos_mercancias": "0",
+                "fuente": "CPNP NIEVA",
+                "motivo": "INFRAESTRUCTURA",
+                "codigo_via": "PE-5ND",
+                "nombre_carretera": "VIA ORACUSA - SARAMIRIZA",
+                "alerta_activa_24_horas": "SI"
+            }
+        }
+    ],
+    "fecha_hora_actualizacion": "11\/06\/2026 10:32",
+    "numeros": {
+        "num_alertas_normal": 9,
+        "num_alertas_restringido": 8,
+        "num_alertas_interrumpido": 2
+    }
+}

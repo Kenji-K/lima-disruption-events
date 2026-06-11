@@ -4,7 +4,7 @@ import { closeDb } from '@disruption-intelligence/db';
 import { buildServer } from './server';
 import { env } from './env';
 import { log } from './log';
-import { createIngestTask } from './ingest/schedule';
+import { createIngestTask, createRoadAlertTask } from './ingest/schedule';
 
 const app = await buildServer(log);
 
@@ -13,10 +13,12 @@ const app = await buildServer(log);
 Sentry.setupFastifyErrorHandler(app);
 
 // Cron rides the Fastify lifecycle (V1-BRIEF Tier 0 decision: one process, one
-// logger). app.close() stops the schedule and drains the DB pool.
+// logger). app.close() stops the schedules and drains the DB pool.
 const ingestTask = createIngestTask(log);
+const roadAlertTask = createRoadAlertTask(log);
 app.addHook('onClose', async () => {
     await ingestTask.stop();
+    await roadAlertTask.stop();
     await closeDb();
 });
 

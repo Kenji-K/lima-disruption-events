@@ -1,13 +1,21 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { pino } from 'pino';
+import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import {
+    apiRoadAlertSchema,
     scrapedEventSchema,
     type ApiEvent,
     type ScrapedEvent,
 } from '@disruption-intelligence/shared';
 import { upsertEvents } from '../../src/ingest/upsert';
+import { parseSutranAlerts, replaceRoadAlerts } from '../../src/ingest/sutran-alerts';
 import { buildServer } from '../../src/server';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Slice of the OpenAPI document the spec test asserts against.
 type OpenApiSpecSlice = {
@@ -75,6 +83,11 @@ let boomApp: FastifyInstance;
 
 beforeAll(async () => {
     await upsertEvents(scrapedEventSchema.array().parse(fixtures));
+    await replaceRoadAlerts(
+        parseSutranAlerts(
+            readFileSync(join(__dirname, '..', 'ingest', 'fixtures', 'sutran-alerts.json'), 'utf8'),
+        ),
+    );
     app = await buildServer(pino({ level: 'silent' }));
     await app.ready();
     // Separate instance with a test-only throwing route, for error-handler assertions.
@@ -222,6 +235,25 @@ describe('GET /events/:id', () => {
     });
 });
 
+describe('GET /road-alerts', () => {
+    it('serves the current snapshot, contract-validated, ordered worst-first', async () => {
+        const res = await app.inject({ method: 'GET', url: '/road-alerts' });
+        expect(res.statusCode).toBe(200);
+        const body = z.array(apiRoadAlertSchema).parse(res.json());
+        expect(body).toHaveLength(19);
+        // interrumpido (2) → restringido (8) → normal (9)
+        expect(body.slice(0, 2).every((a) => a.estado === 'interrumpido')).toBe(true);
+        expect(body.slice(-9).every((a) => a.estado === 'normal')).toBe(true);
+
+        const callao = body.find((a) => a.ubigeo === 'CALLAO/CALLAO/MI PERU');
+        expect(callao).toBeDefined();
+        expect(callao!.location.lng).toBeCloseTo(-77.1301, 4);
+        expect(callao!.location.lat).toBeCloseTo(-11.8542, 4);
+        expect(callao!.codigoVia).toBe('PE-20');
+        expect(callao!.datasetUpdatedAt).toBe('2026-06-11T15:32:00.000Z');
+    });
+});
+
 describe('error sanitization and abuse guards', () => {
     it('sanitizes 5xx responses — no error message internals reach the client', async () => {
         // Test-only route throwing a Drizzle-shaped error message; the handler must
@@ -261,7 +293,7 @@ describe('OpenAPI at /docs', () => {
         expect(res.statusCode).toBe(200);
         const spec = res.json<OpenApiSpecSlice>();
         expect(Object.keys(spec.paths)).toEqual(
-            expect.arrayContaining(['/healthz', '/events', '/events/{id}']),
+            expect.arrayContaining(['/healthz', '/events', '/events/{id}', '/road-alerts']),
         );
         // Spot-check the spec reflects the Zod schemas: /events 200 is an array
         // and the querystring filters are documented.

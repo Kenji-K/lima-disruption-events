@@ -1,11 +1,12 @@
 import { z } from 'zod';
-import { apiEventSchema, type ApiEvent } from '@disruption-intelligence/shared';
+import { apiEventSchema, apiRoadAlertSchema, type ApiEvent } from '@disruption-intelligence/shared';
 
 // Canonical event shape served by the API — lives in @disruption-intelligence/shared
 // as the cross-boundary contract with apps/web. Re-exported here so route schemas
 // and the OpenAPI spec stay anchored to the same object.
 export const eventResponseSchema = apiEventSchema;
 export type EventResponse = ApiEvent;
+export const roadAlertResponseSchema = apiRoadAlertSchema;
 
 export const eventsQuerySchema = z.object({
     from: z.iso

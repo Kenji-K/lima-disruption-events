@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router';
 import maplibregl from 'maplibre-gl';
-import type { ApiEvent } from '@disruption-intelligence/shared';
+import type { ApiEvent, ApiRoadAlert } from '@disruption-intelligence/shared';
 import { formatDateTime } from '../format';
 
 // OpenFreeMap: no key, no account (V1-BRIEF Tier 0 default; MapTiler only if a key lands).
@@ -42,10 +42,63 @@ function popupContent(group: ApiEvent[], onSelect: (id: number) => void): HTMLEl
     return root;
 }
 
-export default function EventMap({ events }: { events: ApiEvent[] }) {
+// SUTRAN alert markers: diamond, colored by estado — visually distinct from
+// the round blue event pins (different data lifecycle, different shape).
+const ALERT_COLORS: Record<ApiRoadAlert['estado'], string> = {
+    interrumpido: 'bg-red-600',
+    restringido: 'bg-amber-500',
+    normal: 'bg-emerald-500',
+};
+const ALERT_LABELS: Record<ApiRoadAlert['estado'], string> = {
+    interrumpido: 'Tránsito interrumpido',
+    restringido: 'Tránsito restringido',
+    normal: 'Tránsito normal',
+};
+
+function alertMarkerElement(estado: ApiRoadAlert['estado']): HTMLDivElement {
+    const el = document.createElement('div');
+    el.className = `h-3.5 w-3.5 rotate-45 cursor-pointer border-2 border-white shadow-md ${ALERT_COLORS[estado]}`;
+    return el;
+}
+
+function alertPopupContent(alert: ApiRoadAlert): HTMLElement {
+    const root = document.createElement('div');
+    root.className = 'w-64 px-1 py-0.5 text-xs';
+    const add = (text: string | null, className: string) => {
+        if (!text) return;
+        const div = document.createElement('div');
+        div.className = className;
+        div.textContent = text;
+        root.appendChild(div);
+    };
+    add(ALERT_LABELS[alert.estado], 'font-semibold text-zinc-900');
+    add(
+        [alert.codigoVia, alert.nombreCarretera].filter(Boolean).join(' · '),
+        'mt-0.5 text-zinc-700',
+    );
+    add(alert.afectacion, 'text-zinc-700');
+    add(alert.evento, 'mt-0.5 text-zinc-500');
+    add(
+        alert.reportedAt ? `Actualizado ${formatDateTime(alert.reportedAt)}` : null,
+        'mt-1 text-zinc-400',
+    );
+    add(`Fuente: ${alert.fuente ?? 'SUTRAN'}`, 'text-zinc-400');
+    return root;
+}
+
+export default function EventMap({
+    events,
+    roadAlerts,
+    showAlerts,
+}: {
+    events: ApiEvent[];
+    roadAlerts: ApiRoadAlert[];
+    showAlerts: boolean;
+}) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
     const markersRef = useRef<maplibregl.Marker[]>([]);
+    const alertMarkersRef = useRef<maplibregl.Marker[]>([]);
     const navigate = useNavigate();
     const { search } = useLocation();
 
@@ -106,6 +159,27 @@ export default function EventMap({ events }: { events: ApiEvent[] }) {
             markersRef.current.push(marker);
         }
     }, [events]);
+
+    // The alert layer (ADR-010) renders independently of the event markers and
+    // the event filters — it mirrors current road state, not the calendar.
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) return;
+        for (const m of alertMarkersRef.current) m.remove();
+        alertMarkersRef.current = [];
+        if (!showAlerts) return;
+
+        for (const alert of roadAlerts) {
+            const popup = new maplibregl.Popup({ offset: 12, maxWidth: '280px' }).setDOMContent(
+                alertPopupContent(alert),
+            );
+            const marker = new maplibregl.Marker({ element: alertMarkerElement(alert.estado) })
+                .setLngLat([alert.location.lng, alert.location.lat])
+                .setPopup(popup)
+                .addTo(map);
+            alertMarkersRef.current.push(marker);
+        }
+    }, [roadAlerts, showAlerts]);
 
     // Drawer open → ease the selected event's marker into the visible (unpadded)
     // half of the map; drawer dismissed → ease the padding back out.

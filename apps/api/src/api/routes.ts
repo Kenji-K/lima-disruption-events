@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { and, asc, eq, lte, sql } from 'drizzle-orm';
-import { db, events } from '@disruption-intelligence/db';
+import { db, events, roadAlerts } from '@disruption-intelligence/db';
 import {
     eventResponseSchema,
     eventsQuerySchema,
@@ -11,6 +11,7 @@ import {
     healthzOkSchema,
     healthzDegradedSchema,
     notFoundSchema,
+    roadAlertResponseSchema,
     type EventResponse,
 } from './schemas';
 
@@ -136,6 +137,58 @@ export function registerRoutes(app: FastifyInstance): void {
                 .limit(limit);
 
             return rows.map(toEventResponse);
+        },
+    );
+
+    r.get(
+        '/road-alerts',
+        {
+            schema: {
+                tags: ['road-alerts'],
+                summary: 'Current SUTRAN road-network alert snapshot (ADR-010)',
+                response: { 200: z.array(roadAlertResponseSchema) },
+            },
+        },
+        async () => {
+            const rows = await db
+                .select({
+                    id: roadAlerts.id,
+                    estado: roadAlerts.estado,
+                    lng: sql<number>`ST_X(${roadAlerts.location}::geometry)`,
+                    lat: sql<number>`ST_Y(${roadAlerts.location}::geometry)`,
+                    codigoVia: roadAlerts.codigoVia,
+                    nombreCarretera: roadAlerts.nombreCarretera,
+                    afectacion: roadAlerts.afectacion,
+                    evento: roadAlerts.evento,
+                    motivo: roadAlerts.motivo,
+                    fuente: roadAlerts.fuente,
+                    ubigeo: roadAlerts.ubigeo,
+                    reportedAt: roadAlerts.reportedAt,
+                    eventStartedOn: roadAlerts.eventStartedOn,
+                    datasetUpdatedAt: roadAlerts.datasetUpdatedAt,
+                })
+                .from(roadAlerts)
+                // Worst-first: the consumer that truncates sees closures first.
+                .orderBy(
+                    sql`CASE ${roadAlerts.estado} WHEN 'interrumpido' THEN 0 WHEN 'restringido' THEN 1 ELSE 2 END`,
+                    asc(roadAlerts.id),
+                );
+
+            return rows.map((row) => ({
+                id: row.id,
+                estado: row.estado as 'normal' | 'restringido' | 'interrumpido',
+                location: { lng: row.lng, lat: row.lat },
+                codigoVia: row.codigoVia,
+                nombreCarretera: row.nombreCarretera,
+                afectacion: row.afectacion,
+                evento: row.evento,
+                motivo: row.motivo,
+                fuente: row.fuente,
+                ubigeo: row.ubigeo,
+                reportedAt: row.reportedAt ? row.reportedAt.toISOString() : null,
+                eventStartedOn: row.eventStartedOn,
+                datasetUpdatedAt: row.datasetUpdatedAt.toISOString(),
+            }));
         },
     );
 

@@ -9,6 +9,7 @@ import { limaExpresaScraper, LIMA_EXPRESA_SOURCE_ID } from './lima-expresa-scrap
 import { recurringEventsScraper, RECURRING_SOURCE_ID } from './recurring-events';
 import { createGobPeScraper, GOB_PE_INSTITUTIONS } from './gob-pe-scraper';
 import { upsertEvents } from './upsert';
+import { runRoadAlertSyncOnce } from './sutran-alerts';
 import { cancelMissingEvents } from './sweep';
 import { getCursor, recordFailure, recordSuccess } from './state';
 import type { Scraper } from './types';
@@ -95,6 +96,11 @@ export async function runIngestOnce(log: Logger, scrapers: Scraper[] = SCRAPERS)
             });
         }
     }
+
+    // Road-alert snapshot rides the daily run too (ADR-010) — covers manual
+    // `pnpm ingest` refreshes; the 2-hourly task owns steady-state freshness.
+    // Never throws; failures land in ingest_state under 'sutran-alerts'.
+    await runRoadAlertSyncOnce(runLog);
 
     const durationMs = Date.now() - startedAt;
     runLog.info(

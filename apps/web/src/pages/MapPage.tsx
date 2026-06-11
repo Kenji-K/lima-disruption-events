@@ -1,5 +1,6 @@
 import { Outlet, useSearchParams } from 'react-router';
 import { useEvents, type EventFilters } from '../api/events';
+import { useRoadAlerts } from '../api/roadAlerts';
 import FilterBar from '../components/FilterBar';
 import EventList from '../components/EventList';
 import EventMap from '../components/EventMap';
@@ -18,8 +19,26 @@ function filtersFromParams(params: URLSearchParams): EventFilters {
 }
 
 export default function MapPage() {
-    const [params] = useSearchParams();
+    const [params, setParams] = useSearchParams();
     const { data: events, isPending, isError } = useEvents(filtersFromParams(params));
+    const { data: roadAlerts } = useRoadAlerts();
+    // Default ON: the road-state layer is the map's differentiator. '0' hides it.
+    const showAlerts = params.get('alertas') !== '0';
+
+    const toggleAlerts = () => {
+        setParams(
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                if (showAlerts) {
+                    next.set('alertas', '0');
+                } else {
+                    next.delete('alertas');
+                }
+                return next;
+            },
+            { replace: true },
+        );
+    };
 
     return (
         <div className="flex h-screen flex-col">
@@ -37,7 +56,20 @@ export default function MapPage() {
                     <EventList events={events} isPending={isPending} isError={isError} />
                 </aside>
                 <div className="relative min-w-0 flex-1">
-                    <EventMap events={events ?? []} />
+                    <EventMap
+                        events={events ?? []}
+                        roadAlerts={roadAlerts ?? []}
+                        showAlerts={showAlerts}
+                    />
+                    <label className="absolute top-3 left-3 z-10 flex cursor-pointer items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm select-none">
+                        <input
+                            type="checkbox"
+                            checked={showAlerts}
+                            onChange={toggleAlerts}
+                            className="h-3.5 w-3.5 accent-red-600"
+                        />
+                        Alertas viales (SUTRAN)
+                    </label>
                     <Outlet />
                 </div>
             </main>
