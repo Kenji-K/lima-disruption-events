@@ -96,7 +96,7 @@ MVBP business wrapper (contracts, SOW, invoicing/RUC, WhatsApp support, advisory
 
 ## Human prerequisites (user to-do, not agent work)
 
-- [ ] **Send the MML Ley de Transparencia letter** (drafted 2026-05-06; needs DNI, signature, Mesa de Partes Virtual submission). Gates Tier 2 item 4; 7–30 business days latency. Same template second-wave to district municipalities.
+- [x] **Send the MML Ley de Transparencia letter** — SENT 2026-06-11 via Mesa de Partes Virtual (response window ≈ 2026-06-22 → 2026-07-23). The Ord. 1680 import path (`pnpm -F api import-events`) is built and waiting for the data. Same template second-wave to district municipalities still pending.
 - [ ] Fly.io: account, billing, `fly auth login`, app + Postgres created (or grant the session a token).
 - [ ] Vercel: account + project link (or token).
 - [ ] Sentry: org + two DSNs (api, web).
