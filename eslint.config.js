@@ -10,6 +10,7 @@ export default tseslint.config(
             '**/dist/**',
             '**/build/**',
             '**/.vite/**',
+            '**/.vercel/**',
             '**/coverage/**',
             '**/migrations/**',
             'mockup/**',
