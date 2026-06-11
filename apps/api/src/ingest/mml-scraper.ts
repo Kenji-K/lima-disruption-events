@@ -5,6 +5,7 @@ import type { Logger } from 'pino';
 import { newsDedupKey, type ScrapedEvent } from '@disruption-intelligence/shared';
 import { fetchWithRetry } from './fetch';
 import { extractDateRange, normalize, toEndIso, toStartIso } from './extract-dates';
+import { matchRoadDisruption, ROAD_MENTION_RE } from './road-filter';
 import type { ScrapeResult } from './types';
 
 export const MML_SOURCE_ID = 'mml';
@@ -41,30 +42,11 @@ type WpPost = z.infer<typeof wpPostSchema>;
 
 const cursorSchema = z.object({ after: z.string().min(19) });
 
-/** Keyword filter, tuned against reality on 2026-06-11 (the brief explicitly
- *  invites tuning). The brief's bare list (cierre, vía, interferencia, desvío,
- *  obra, cerrada, corte, clausura) was probed against two live fixture batches
- *  and produced ~80% false positives: 'obras' matches public works *and* books
- *  ("obras en lenguas indígenas"), 'vía(s)' is municipal boilerplate, and
- *  "cierre de campañas electorales" sails through. Tightened to three gates,
- *  all required (word-boundary, on lowercased diacritic-stripped text):
- *
- *  1. a STRONG disruption trigger — the words that announce a road action;
- *  2. CONCRETE road infrastructure context — 'vía(s)'/'obra(s)' deliberately
- *     excluded (every MML post can mention them; MML's own footer address
- *     "Av. 28 de Julio" is also why gate 3 exists);
- *  3. PROXIMITY — a trigger within TRIGGER_CONTEXT_WINDOW chars of a road term
- *     ("cierre de la avenida Abancay" passes; 'cierre' in paragraph one plus
- *     the HQ address in the footer does not). */
+/** MML's disruption-trigger vocabulary — precision-tuned against live MML
+ *  fixture batches 2026-06-11. The road-context + proximity gates that make
+ *  it safe live in road-filter.ts (shared with the gob.pe scraper). */
 const DISRUPTION_TRIGGER_RE =
     /\b(cierres?|cerrad[oa]s?|cortes?|clausuras?|desvios?|interferencias?)\b/g;
-const ROAD_CONTEXT_RE =
-    /\b(av(?:enida)?s?\.|avenidas?\b|jr\.|jiron(?:es)?\b|calles?\b|puentes?\b|ovalos?\b|carreteras?\b|autopistas?\b|malecon(?:es)?\b|paseos?\b|transito\b|vehicular(?:es)?\b|peatonal(?:es)?\b)/g;
-const TRIGGER_CONTEXT_WINDOW = 150;
-
-/** Road-name mentions for sourcePayload (debugging + future geocoding input). */
-const ROAD_MENTION_RE =
-    /(?:av(?:enida)?\.?|jr\.?|jir[oó]n|calle|puente|[oó]valo|malec[oó]n|carretera|autopista|paseo)\s+[A-ZÁÉÍÓÚÑ0-9][^,.;:()\n<]{2,40}/g;
 
 /** Pure per-post extraction: null when the post is not a datable road
  *  disruption. Exported for fixture-driven tests. */
@@ -76,19 +58,14 @@ export function extractDisruptionEvent(post: WpPost, log?: Logger): ScrapedEvent
     const text = `${title}\n${body}`;
     const norm = normalize(text);
 
-    const triggers = [...norm.matchAll(DISRUPTION_TRIGGER_RE)];
-    if (triggers.length === 0) return null;
-
-    const roadTerms = [...norm.matchAll(ROAD_CONTEXT_RE)];
-    const proximate = triggers.some((trig) =>
-        roadTerms.some((road) => Math.abs(road.index - trig.index) <= TRIGGER_CONTEXT_WINDOW),
-    );
-    if (!proximate) {
-        const keywords = [...new Set(triggers.map((m) => m[1]!))];
-        log?.debug({ postId: post.id, keywords }, 'mml: trigger without nearby road context');
+    const gate = matchRoadDisruption(norm, DISRUPTION_TRIGGER_RE);
+    if (gate.keywords === null) {
+        if (gate.reason === 'no-road-context') {
+            log?.debug({ postId: post.id }, 'mml: trigger without nearby road context');
+        }
         return null;
     }
-    const keywords = [...new Set(triggers.map((m) => m[1]!))];
+    const keywords = gate.keywords;
 
     const postDay = {
         y: Number(post.date.slice(0, 4)),

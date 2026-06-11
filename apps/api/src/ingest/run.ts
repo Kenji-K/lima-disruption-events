@@ -7,6 +7,7 @@ import { futbolperuanoScraper } from './futbolperuano-scraper';
 import { mmlScraper, MML_SOURCE_ID } from './mml-scraper';
 import { limaExpresaScraper, LIMA_EXPRESA_SOURCE_ID } from './lima-expresa-scraper';
 import { recurringEventsScraper, RECURRING_SOURCE_ID } from './recurring-events';
+import { createGobPeScraper, GOB_PE_INSTITUTIONS } from './gob-pe-scraper';
 import { upsertEvents } from './upsert';
 import { cancelMissingEvents } from './sweep';
 import { getCursor, recordFailure, recordSuccess } from './state';
@@ -17,9 +18,15 @@ import type { Scraper } from './types';
 const SCRAPERS: Scraper[] = [
     { name: 'gran-teatro-nacional', scrape: granTeatroNacionalScraper },
     { name: 'futbolperuano', scrape: futbolperuanoScraper },
+    // mml runs BEFORE the gob.pe channels: ADR-009's first-channel-wins makes
+    // the richer WP copy own any cross-channel comunicado in steady state.
     { name: MML_SOURCE_ID, scrape: mmlScraper },
     { name: LIMA_EXPRESA_SOURCE_ID, scrape: limaExpresaScraper },
     { name: RECURRING_SOURCE_ID, scrape: recurringEventsScraper },
+    ...GOB_PE_INSTITUTIONS.map((inst) => ({
+        name: `gob-pe-${inst}`,
+        scrape: createGobPeScraper(inst),
+    })),
 ];
 
 // `scrapers` is injectable for orchestration tests only; production callers

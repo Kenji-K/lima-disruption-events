@@ -37,6 +37,15 @@ export const toStartIso = ({ y, m, d }: PlainDate): string =>
 export const toEndIso = ({ y, m, d }: PlainDate): string =>
     `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T23:59:00-05:00`;
 
+/** Full Spanish text date with explicit year — gob.pe's listing `date` field
+ *  ("3 de junio de 2026", sometimes with a leading space). */
+export function parseSpanishDate(text: string): PlainDate | null {
+    const m = new RegExp(`(\\d{1,2})\\s+de\\s+${MONTH}\\s+de\\s+(\\d{4})`).exec(normalize(text));
+    if (!m) return null;
+    const date = { y: Number(m[3]), m: MONTHS[m[2]!]!, d: Number(m[1]) };
+    return isRealDate(date) ? date : null;
+}
+
 /** Tries range patterns first, then "a partir del", then the first bare
  *  "N de MONTH". Years default to the post's year; a date landing >60 days
  *  BEFORE the post rolls forward one year (December post about January
