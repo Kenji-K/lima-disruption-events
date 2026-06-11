@@ -7,8 +7,13 @@ import { z } from 'zod';
 // localhost.
 const envSchema = z.object({
     VITE_API_URL: import.meta.env.DEV ? z.url().default('http://localhost:3000') : z.url(),
+    // Optional everywhere: a missing DSN disables Sentry, it never blocks the app.
+    VITE_SENTRY_DSN: z.url().optional(),
 });
 
+const parsed = envSchema.parse(import.meta.env);
+
 export const env = {
-    apiUrl: envSchema.parse(import.meta.env).VITE_API_URL,
+    apiUrl: parsed.VITE_API_URL,
+    sentryDsn: parsed.VITE_SENTRY_DSN,
 };

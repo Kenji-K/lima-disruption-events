@@ -1,3 +1,5 @@
+import './instrument';
+import * as Sentry from '@sentry/node';
 import { closeDb } from '@disruption-intelligence/db';
 import { buildServer } from './server';
 import { env } from './env';
@@ -5,6 +7,10 @@ import { log } from './log';
 import { createIngestTask } from './ingest/schedule';
 
 const app = await buildServer(log);
+
+// 5xx responses reach Sentry via an onError hook; the sanitized error handler
+// in server.ts still controls what the client sees. No-op without a DSN.
+Sentry.setupFastifyErrorHandler(app);
 
 // Cron rides the Fastify lifecycle (V1-BRIEF Tier 0 decision: one process, one
 // logger). app.close() stops the schedule and drains the DB pool.

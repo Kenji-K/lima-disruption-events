@@ -11,15 +11,17 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "studio": "drizzle-kit studio",
-    "seed": "tsx src/seed-cli.ts"
+    "seed": "tsx src/seed-cli.ts",
+    "release": "tsx src/release-cli.ts"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "drizzle-orm": "^0.45.2",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "drizzle-kit": "^0.31.10",
-    "tsx": "^4.21.0"
+    "drizzle-kit": "^0.31.10"
   }
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import * as Sentry from '@sentry/node';
 import type { Logger } from 'pino';
 import { scrapedEventSchema } from '@disruption-intelligence/shared';
 import { granTeatroNacionalScraper } from './gran-teatro-nacional-scraper';
@@ -54,6 +55,9 @@ export async function runIngestOnce(log: Logger): Promise<void> {
             }
         } catch (err) {
             failedSources.push(name);
+            // Cron runs have no request to error against — Sentry is the only
+            // push-visibility into failed sources in prod. No-op without a DSN.
+            Sentry.captureException(err, { tags: { source: name } });
             runLog.error(
                 { source: name, err },
                 'source ingest failed — continuing with remaining sources',

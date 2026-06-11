@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@disruption-intelligence/shared": "workspace:*",
+    "@sentry/react": "^10.57.0",
     "@tanstack/react-query": "^5.101.0",
     "maplibre-gl": "^5.24.0",
     "react": "^19.2.7",
