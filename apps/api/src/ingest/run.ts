@@ -6,16 +6,19 @@ import { granTeatroNacionalScraper } from './gran-teatro-nacional-scraper';
 import { futbolperuanoScraper } from './futbolperuano-scraper';
 import { upsertEvents } from './upsert';
 import { cancelMissingEvents } from './sweep';
-import type { ScrapeResult } from './types';
+import { getCursor, recordFailure, recordSuccess } from './state';
+import type { Scraper } from './types';
 
 // `name` doubles as the sweep's sourceId filter — it must equal the SOURCE_ID
-// each scraper stamps on its events.
-const SCRAPERS: { name: string; scrape: (log: Logger) => Promise<ScrapeResult> }[] = [
+// each scraper stamps on its events. This list IS the source registry (ADR-007).
+const SCRAPERS: Scraper[] = [
     { name: 'gran-teatro-nacional', scrape: granTeatroNacionalScraper },
     { name: 'futbolperuano', scrape: futbolperuanoScraper },
 ];
 
-export async function runIngestOnce(log: Logger): Promise<void> {
+// `scrapers` is injectable for orchestration tests only; production callers
+// never pass it.
+export async function runIngestOnce(log: Logger, scrapers: Scraper[] = SCRAPERS): Promise<void> {
     const runId = randomUUID();
     const runLog = log.child({ runId });
     const startedAt = Date.now();
@@ -27,9 +30,10 @@ export async function runIngestOnce(log: Logger): Promise<void> {
 
     // Per-source isolation: scrape → validate → upsert → sweep per scraper, so one
     // source failing (or producing invalid output) never blocks the others.
-    for (const { name, scrape } of SCRAPERS) {
+    for (const { name, scrape } of scrapers) {
         try {
-            const { events: raw, sweepWindowEnd } = await scrape(runLog);
+            const cursor = await getCursor(name);
+            const { events: raw, sweepWindowEnd, nextCursor } = await scrape(runLog, cursor);
             const validated = scrapedEventSchema.array().parse(raw);
             const counts = await upsertEvents(validated);
             inserted += counts.inserted;
@@ -53,6 +57,10 @@ export async function runIngestOnce(log: Logger): Promise<void> {
                     );
                 }
             }
+
+            // Cursor persists only after validate+upsert succeeded (ADR-007); a
+            // throw above leaves the stored cursor frozen for the next run.
+            await recordSuccess(name, nextCursor);
         } catch (err) {
             failedSources.push(name);
             // Cron runs have no request to error against — Sentry is the only
@@ -62,6 +70,10 @@ export async function runIngestOnce(log: Logger): Promise<void> {
                 { source: name, err },
                 'source ingest failed — continuing with remaining sources',
             );
+            // State write failure must not break per-source isolation.
+            await recordFailure(name, err).catch((stateErr: unknown) => {
+                runLog.error({ source: name, err: stateErr }, 'ingest_state write failed');
+            });
         }
     }
 
