@@ -248,7 +248,6 @@ describe('GET /sources', () => {
                 sourceId: string;
                 lastSuccessAt: string | null;
                 lastErrorAt: string | null;
-                lastError: string | null;
                 consecutiveFailures: number;
             }[]
         >();
@@ -259,9 +258,11 @@ describe('GET /sources', () => {
         expect(fresh!.consecutiveFailures).toBe(0);
 
         const failing = body.find((s) => s.sourceId === 'failing-test-source');
-        expect(failing!.lastError).toBe('synthetic failure');
+        expect(failing!.lastErrorAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
         expect(failing!.consecutiveFailures).toBe(1);
         expect(failing!.lastSuccessAt).toBeNull();
+        // Error TEXT must not reach the public endpoint (info-disclosure guard).
+        expect(res.body).not.toContain('synthetic failure');
     });
 });
 

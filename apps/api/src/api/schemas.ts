@@ -39,13 +39,15 @@ export const eventIdParamsSchema = z.object({
 });
 
 /** Per-source ingest freshness (ADR-007's ingest_state, Tier-2 visibility).
- *  Ops-facing — not part of the web contract in @disruption-intelligence/shared. */
+ *  Ops-facing — not part of the web contract in @disruption-intelligence/shared.
+ *  Deliberately EXCLUDES lastError text: the API is public (no auth in v1) and
+ *  raw error strings can leak internals; timestamps + failure counts carry the
+ *  freshness signal, full detail lives in logs/Sentry/DB. */
 export const sourceStatusSchema = z.object({
     sourceId: z.string(),
     lastRunAt: z.iso.datetime().nullable(),
     lastSuccessAt: z.iso.datetime().nullable(),
     lastErrorAt: z.iso.datetime().nullable(),
-    lastError: z.string().nullable(),
     consecutiveFailures: z.number().int(),
 });
 

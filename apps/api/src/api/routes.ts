@@ -151,13 +151,13 @@ export function registerRoutes(app: FastifyInstance): void {
             },
         },
         async () => {
+            // lastError text stays out of the public response (see schema note).
             const rows = await db
                 .select({
                     sourceId: ingestState.sourceId,
                     lastRunAt: ingestState.lastRunAt,
                     lastSuccessAt: ingestState.lastSuccessAt,
                     lastErrorAt: ingestState.lastErrorAt,
-                    lastError: ingestState.lastError,
                     consecutiveFailures: ingestState.consecutiveFailures,
                 })
                 .from(ingestState)
