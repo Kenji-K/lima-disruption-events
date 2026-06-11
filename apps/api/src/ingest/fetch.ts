@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { Logger } from 'pino';
+import './ca'; // patch incomplete upstream TLS chains before any scraper fetch
 
 // Polite UA identifies the project. Add a contact suffix (public alias or repo URL)
 // once the repo is public — never a personal email.
