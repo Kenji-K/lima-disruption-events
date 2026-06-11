@@ -56,8 +56,15 @@ const ALERT_LABELS: Record<ApiRoadAlert['estado'], string> = {
 };
 
 function alertMarkerElement(estado: ApiRoadAlert['estado']): HTMLDivElement {
+    // MapLibre positions the marker by writing an inline `transform: translate(…)`
+    // on the ROOT element. Tailwind's rotate-45 sets the CSS `rotate` property,
+    // which composes BEFORE `transform` — it would rotate the screen-position
+    // vector itself and the marker drifts as the map pans (bug observed in prod).
+    // The root stays transform-free; the diamond rotation lives on a child.
     const el = document.createElement('div');
-    el.className = `h-3.5 w-3.5 rotate-45 cursor-pointer border-2 border-white shadow-md ${ALERT_COLORS[estado]}`;
+    const diamond = document.createElement('div');
+    diamond.className = `h-3.5 w-3.5 rotate-45 cursor-pointer border-2 border-white shadow-md ${ALERT_COLORS[estado]}`;
+    el.appendChild(diamond);
     return el;
 }
 
