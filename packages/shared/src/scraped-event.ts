@@ -16,6 +16,9 @@ export const scrapedEventSchema = z
         // up in customer-facing <a href> — a scraper copying a raw upstream href
         // must not be able to plant a stored-XSS payload.
         sourceUrl: z.url({ protocol: /^https?$/ }).optional(),
+        // ADR-009: cross-channel dedup key (newsDedupKey of the headline).
+        // News-derived sources only; omit — never empty-string — when absent.
+        dedupKey: z.string().min(1).optional(),
     })
     .refine((data) => !data.endAt || new Date(data.endAt) > new Date(data.startAt), {
         error: 'endAt must be after startAt',

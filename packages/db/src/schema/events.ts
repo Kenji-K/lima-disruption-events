@@ -58,6 +58,9 @@ export const events = pgTable(
          *  ticket listing, or announcement. Surfaced to end users when present; not every
          *  source provides one. No index — never used in WHERE clauses, only in SELECTs. */
         sourceUrl: text(),
+        /** ADR-009: cross-channel news dedup key — newsDedupKey(title) for news-derived
+         *  events, NULL for sources whose identity is structural (venues, fixtures). */
+        dedupKey: text(),
         ingestedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     },
@@ -69,5 +72,9 @@ export const events = pgTable(
         index('events_region_category_idx')
             .on(t.regionId, t.category)
             .where(sql`${t.state} = 'scheduled'`),
+        // ADR-009: serves the upsert-time cross-channel suppression lookup only.
+        index('events_dedup_key_idx')
+            .on(t.dedupKey)
+            .where(sql`${t.dedupKey} IS NOT NULL`),
     ],
 );
