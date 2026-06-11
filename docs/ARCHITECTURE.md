@@ -175,6 +175,16 @@ Decisions explicitly punted on for v0 — listed here so they're not re-litigate
 
 **No build step on internal workspace packages.** `packages/{db,shared}` ship raw `.ts` source via `exports: { ".": "./src/index.ts" }`. All current consumers (`tsx` for `apps/api`, Vite for `apps/web` once scaffolded, Vitest, `tsc --noEmit`, the editor's TS language server) are TS-aware, so no compile step is needed and no `dist/` exists. Revisit if any of: (1) the Week 3 Fly deploy lands on a strategy that ships raw `node_modules/` to a stock `node` runtime — both safe defaults (bundling `apps/api` with esbuild/tsup, or running it via `tsx`/`node --experimental-strip-types` in the container) keep this decision intact, so this only fires if we explicitly opt into per-package `dist/` shipping; (2) any `@disruption-intelligence/*` package gets published externally — out of v0 scope and a major strategic shift; (3) we adopt a tool that resolves modules without TS awareness (e.g. a coverage tool or legacy ESLint plugin doing its own resolution) and per-tool config can't fix it. Migration if triggered is mechanical: add `tsc -p tsconfig.build.json` (or `tsup`) emitting `dist/index.js` + `dist/index.d.ts`, flip `exports` to conditional `import`/`types` pointing at `dist/`, wire into the install/CI step. Roughly 30 minutes per package, no migration debt accrues by deferring.
 
+### pnpm peer-resolution split: drizzle-orm × @opentelemetry/api
+
+drizzle-orm declares an *optional* peer dependency on `@opentelemetry/api`. The moment any workspace package adds a dependency that ships otel (first instance: `@sentry/node` in `apps/api`, 2026-06-11), pnpm materializes **two** drizzle-orm instances — one resolved with the otel peer, one without — and their types are nominally incompatible (`PgSession` has protected members), so `tsc` fails on any value that crosses packages (e.g. passing `db` from `packages/db` into `migrate()` resolved in `apps/api`). Runtime would work; the type error is the only symptom.
+
+Remedy adopted: `packages/db` declares `@opentelemetry/api` as a regular dependency (one line, ~no weight) so both importers resolve the *same* drizzle instance. Rule going forward: every workspace package that depends on drizzle-orm carries the same `@opentelemetry/api` declaration for as long as any package in the workspace ships otel.
+
+### Web production deploys are local-prebuilt (Vercel)
+
+`vercel deploy` from the cloud cannot install a pnpm workspace package in isolation (`workspace:*` breaks under the npm fallback), so web ships via local `vercel build` + `vercel deploy --prebuilt` — commands in README "Deploying". Two Vercel CLI traps verified 2026-06-11: the CLI auto-detects agents and runs `--non-interactive` (piped-stdin values for `vercel env add` are silently dropped — always pass `--value`), and Production env vars default to *sensitive*, which `vercel pull` cannot read back — VITE_* vars must be added `--no-sensitive` or local builds bake empty strings.
+
 ### Git committer identity
 
 Local git commits use `Kenji Kina <679022+Kenji-K@users.noreply.github.com>` (GitHub's noreply form), not the user's real email. Keeps the user's address out of the public git log if/when the repo opens up.
