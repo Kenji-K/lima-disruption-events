@@ -3,11 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { scrapedEventSchema } from '@disruption-intelligence/shared';
-import {
-    extractDateRange,
-    extractDisruptionEvent,
-    parseMmlPostsJson,
-} from '../../src/ingest/mml-scraper';
+import { extractDateRange } from '../../src/ingest/extract-dates';
+import { extractDisruptionEvent, parseMmlPostsJson } from '../../src/ingest/mml-scraper';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const recentJson = readFileSync(join(__dirname, 'fixtures', 'mml-posts-recent.json'), 'utf8');

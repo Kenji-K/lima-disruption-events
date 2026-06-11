@@ -5,6 +5,7 @@ import { scrapedEventSchema } from '@disruption-intelligence/shared';
 import { granTeatroNacionalScraper } from './gran-teatro-nacional-scraper';
 import { futbolperuanoScraper } from './futbolperuano-scraper';
 import { mmlScraper, MML_SOURCE_ID } from './mml-scraper';
+import { limaExpresaScraper, LIMA_EXPRESA_SOURCE_ID } from './lima-expresa-scraper';
 import { upsertEvents } from './upsert';
 import { cancelMissingEvents } from './sweep';
 import { getCursor, recordFailure, recordSuccess } from './state';
@@ -16,6 +17,7 @@ const SCRAPERS: Scraper[] = [
     { name: 'gran-teatro-nacional', scrape: granTeatroNacionalScraper },
     { name: 'futbolperuano', scrape: futbolperuanoScraper },
     { name: MML_SOURCE_ID, scrape: mmlScraper },
+    { name: LIMA_EXPRESA_SOURCE_ID, scrape: limaExpresaScraper },
 ];
 
 // `scrapers` is injectable for orchestration tests only; production callers
