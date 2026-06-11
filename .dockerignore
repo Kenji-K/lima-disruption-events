@@ -1,0 +1,10 @@
+# Applies to the API image build (apps/api/Dockerfile, context = repo root).
+# node_modules is the load-bearing entry: `COPY packages ./packages` and
+# `COPY apps/api ./apps/api` must never drag host installs into the image.
+**/node_modules
+**/dist
+.git
+.env
+.env.*
+docs
+mockup

@@ -1,0 +1,29 @@
+# API app (ADR-006). Deploy with --ha=false: exactly ONE always-on machine —
+# the in-process node-cron schedule must fire exactly once per tick, so no
+# autostop and no HA pair. See docs/adr/006-deploy-topology-self-managed-postgis-on-fly.md.
+app = 'disruption-intelligence-api'
+primary_region = 'scl'
+
+[build]
+dockerfile = 'apps/api/Dockerfile'
+
+[deploy]
+# Migrations + idempotent seed run from the release image before promotion
+# (ADR-006); a failure aborts the deploy and the old version keeps serving.
+release_command = 'pnpm --filter @disruption-intelligence/db release'
+
+[env]
+SENTRY_ENVIRONMENT = 'production'
+
+[http_service]
+internal_port = 3000
+force_https = true
+# Cron lives in this process — the machine never stops (ADR-006).
+auto_stop_machines = 'off'
+auto_start_machines = true
+min_machines_running = 1
+
+[[vm]]
+cpu_kind = 'shared'
+cpus = 1
+memory = '512mb'

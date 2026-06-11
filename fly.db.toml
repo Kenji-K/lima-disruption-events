@@ -1,0 +1,35 @@
+# Postgres + PostGIS app (ADR-006): the official postgis image as a plain Fly
+# Machines app — one machine, one volume, and deliberately NO [http_service] or
+# [services] section, so no public IP is ever allocated and no fly-proxy path to
+# the database exists. The API reaches it over 6PN at
+# disruption-intelligence-db.internal:5432.
+#
+# Deploy: fly deploy -c fly.db.toml --ha=false
+# Volume (once): fly volumes create pg_data --region scl --size 1 -a disruption-intelligence-db
+# Secret (once): fly secrets set POSTGRES_PASSWORD=<generated> -a disruption-intelligence-db
+app = 'disruption-intelligence-db'
+primary_region = 'scl'
+
+[build]
+image = 'postgis/postgis:16-3.5'
+
+[env]
+# Volume mounts at /data; PGDATA one level down so initdb tolerates lost+found.
+PGDATA = '/data/pgdata'
+POSTGRES_DB = 'disruption_intelligence'
+POSTGRES_USER = 'disruption_intelligence'
+
+[mounts]
+source = 'pg_data'
+destination = '/data'
+
+[checks.pg]
+type = 'tcp'
+port = 5432
+interval = '15s'
+timeout = '2s'
+
+[[vm]]
+cpu_kind = 'shared'
+cpus = 1
+memory = '512mb'
