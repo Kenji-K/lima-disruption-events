@@ -61,6 +61,7 @@ export function parseCosta21Html(html: string): ScrapedEvent[] {
             category: CATEGORY_MAP[cardCategory] ?? 'concert',
             state: 'scheduled',
             startAt: `${yyyy}-${mm}-${dd}T00:00:00-05:00`,
+            venueName: 'Costa 21',
             sourcePayload: { venue: 'Costa 21', address: VENUE_ADDRESS, cardCategory },
             sourceUrl: href,
         });

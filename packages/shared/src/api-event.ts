@@ -16,6 +16,9 @@ export const apiEventSchema = z.object({
     startAt: z.iso.datetime(),
     endAt: z.iso.datetime().nullable(),
     location: locationSchema.nullable(),
+    /** Venue/place name when the source knows it (G16: coordinates are not a
+     *  place to a human reader). */
+    venueName: z.string().nullable(),
     // Same http(s)-only guard as scrapedEventSchema — this one also runs on every
     // API response via the serializer, so a bad URL can't reach the web client.
     sourceUrl: z.url({ protocol: /^https?$/ }).nullable(),

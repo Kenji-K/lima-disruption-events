@@ -143,6 +143,7 @@ export function parseJoinnusEventHtml(
         state,
         startAt,
         ...(endAt ? { endAt } : {}),
+        ...(venue ? { venueName: venue } : {}),
         ...(location ? { location } : {}),
         sourcePayload: {
             venue,

@@ -31,6 +31,7 @@ const RECURRING_EVENTS: ScrapedEvent[] = [
         // and https://www.infobae.com/peru/2026/05/23/cierres-y-desvios-para-la-lima-42k-guia-practica-para-el-domingo-24-de-mayo/
         startAt: '2026-05-24T05:30:00-05:00',
         endAt: '2026-05-24T13:00:00-05:00',
+        venueName: 'Parque Kennedy (partida)',
         // Start point Parque Kennedy — OSM/Nominatim-verified 2026-06-11.
         location: { lng: -77.0304221, lat: -12.1217806 },
         sourcePayload: {
@@ -76,6 +77,7 @@ const RECURRING_EVENTS: ScrapedEvent[] = [
         // 2026-specific operational plan lands ~mid-July; update endAt if it changes.
         startAt: '2026-07-29T00:00:00-05:00',
         endAt: '2026-07-29T15:00:00-05:00',
+        venueName: 'Av. Brasil (plaza Bolognesi → av. Javier Prado)',
         // Representative point on Av. Brasil (Jesús María stretch) — the closure
         // is the full avenue (line geometry is Tier-2 territory).
         // OSM/Nominatim-verified 2026-06-11.

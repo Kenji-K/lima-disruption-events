@@ -38,6 +38,12 @@ export function parseCalendarHtml(html: string): ScrapedEvent[] {
         const catClass = $cell.find('span[class^="cat-"]').attr('class');
         const category = catClass ? catClass.replace(/^cat-/, '').trim() : 'proximamente';
 
+        // Stage-assembly and rest days are the theatre's internal calendar, not
+        // public events — customer-facing filler (review G4). Dropped here; the
+        // sweep then keeps the DB consistent (rows we stop emitting get flipped
+        // only if still present — both DBs were purged when this landed).
+        if (category === 'montaje' || category === 'descanso') return;
+
         if (!date || !timeOfDay || !slug || !title) {
             throw new Error(
                 `parseCalendarHtml: missing field — date=${date} timeOfDay=${timeOfDay} slug=${slug} title="${title}". GTN markup likely changed.`,
@@ -55,6 +61,7 @@ export function parseCalendarHtml(html: string): ScrapedEvent[] {
             category,
             state: 'scheduled',
             startAt,
+            venueName: 'Gran Teatro Nacional',
             location: VENUE_LOCATION,
             sourceUrl: `${BASE_URL}/evento/${slug}`,
             sourcePayload: { slug, gtnRawCellDatetime: cellDatetimeAttr, date },

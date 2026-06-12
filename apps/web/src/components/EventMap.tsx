@@ -21,10 +21,23 @@ function markerElement(count: number): HTMLDivElement {
 
 // Plain-DOM popup content (MapLibre popups live outside the React tree). Built
 // with textContent — scraped titles must not reach innerHTML.
+// Heavy venues (GTN: dozens of rows) get a count header and a capped list with
+// an explicit expander instead of an unlabeled 4,000px scroll well (review U7).
+const POPUP_INITIAL_ROWS = 10;
+
 function popupContent(group: ApiEvent[], onSelect: (id: number) => void): HTMLElement {
     const root = document.createElement('div');
     root.className = 'max-h-56 w-64 overflow-y-auto';
-    for (const e of group) {
+
+    const header = document.createElement('div');
+    header.className =
+        'sticky top-0 border-b border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold text-zinc-900';
+    const venue = group[0]?.venueName;
+    const countText = group.length === 1 ? '1 evento' : `${group.length} eventos`;
+    header.textContent = venue ? `${countText} · ${venue}` : `${countText} aquí`;
+    root.appendChild(header);
+
+    const rowFor = (e: ApiEvent): HTMLButtonElement => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className =
@@ -37,7 +50,23 @@ function popupContent(group: ApiEvent[], onSelect: (id: number) => void): HTMLEl
         date.textContent = formatDateTime(e.startAt);
         btn.append(title, date);
         btn.addEventListener('click', () => onSelect(e.id));
-        root.appendChild(btn);
+        return btn;
+    };
+
+    for (const e of group.slice(0, POPUP_INITIAL_ROWS)) root.appendChild(rowFor(e));
+
+    const rest = group.slice(POPUP_INITIAL_ROWS);
+    if (rest.length > 0) {
+        const more = document.createElement('button');
+        more.type = 'button';
+        more.className =
+            'block w-full cursor-pointer px-2 py-1.5 text-left text-xs font-medium text-blue-700 hover:bg-blue-50';
+        more.textContent = `Mostrar ${rest.length} más`;
+        more.addEventListener('click', () => {
+            for (const e of rest) root.appendChild(rowFor(e));
+            more.remove();
+        });
+        root.appendChild(more);
     }
     return root;
 }
@@ -121,8 +150,19 @@ export default function EventMap({
             style: STYLE_URL,
             center: LIMA_CENTER,
             zoom: 11,
+            // es-PE for the built-in control strings (ARCHITECTURE.md
+            // "Customer-facing language" — the defaults are English).
+            locale: {
+                'NavigationControl.ZoomIn': 'Acercar',
+                'NavigationControl.ZoomOut': 'Alejar',
+                'NavigationControl.ResetBearing': 'Restablecer orientación',
+                'Popup.Close': 'Cerrar',
+                'Marker.Title': 'Marcador',
+            },
         });
-        map.addControl(new maplibregl.NavigationControl(), 'top-right');
+        // Bottom-left: the event drawer overlays the map's right edge and its
+        // close button used to sit exactly on the zoom "+" (review U1).
+        map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
         mapRef.current = map;
         return () => {
             map.remove();
@@ -176,7 +216,10 @@ export default function EventMap({
         alertMarkersRef.current = [];
         if (!showAlerts) return;
 
-        for (const alert of roadAlerts) {
+        // Only incidencias get markers: 'normal' rows are "todo bien" noise that
+        // buries the two states an operator acts on (review G17/U8). The toggle
+        // label carries the count so an all-clear map still reads as alive.
+        for (const alert of roadAlerts.filter((a) => a.estado !== 'normal')) {
             const popup = new maplibregl.Popup({ offset: 12, maxWidth: '280px' }).setDOMContent(
                 alertPopupContent(alert),
             );
@@ -190,23 +233,27 @@ export default function EventMap({
 
     // Drawer open → ease the selected event's marker into the visible (unpadded)
     // half of the map; drawer dismissed → ease the padding back out.
+    // Deps are the selected event's coordinates, not the events array — a
+    // background refetch must not re-fire the camera animation (review/backlog).
     const selectedIdParam = useMatch('/eventos/:id')?.params.id;
+    const selected = selectedIdParam
+        ? events.find((e) => e.id === Number(selectedIdParam))
+        : undefined;
+    const selectedLng = selected?.location?.lng;
+    const selectedLat = selected?.location?.lat;
     useEffect(() => {
         const map = mapRef.current;
         if (!map) return;
-        const selected = selectedIdParam
-            ? events.find((e) => e.id === Number(selectedIdParam))
-            : undefined;
-        if (selected?.location) {
+        if (selectedLng !== undefined && selectedLat !== undefined) {
             map.easeTo({
-                center: [selected.location.lng, selected.location.lat],
+                center: [selectedLng, selectedLat],
                 padding: { right: DRAWER_WIDTH_PX },
                 duration: 600,
             });
         } else {
             map.easeTo({ padding: { right: 0 }, duration: 600 });
         }
-    }, [selectedIdParam, events]);
+    }, [selectedIdParam, selectedLng, selectedLat]);
 
     return <div ref={containerRef} className="h-full w-full" />;
 }

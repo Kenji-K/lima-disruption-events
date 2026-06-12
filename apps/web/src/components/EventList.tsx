@@ -27,11 +27,22 @@ export default function EventList({ events, isPending, isError }: Props) {
         );
     }
 
+    // An unexplained empty map ("Concierto" → every result unpinned) reads as
+    // broken (review U3/G6) — say out loud how many results have no pin.
+    const unpinned = events.filter((e) => !e.location).length;
+
     return (
         <div>
             <p className="px-4 pt-3 pb-1 text-xs font-medium tracking-wide text-zinc-500 uppercase">
                 {events.length} {events.length === 1 ? 'evento' : 'eventos'}
             </p>
+            {unpinned > 0 && (
+                <p className="px-4 pb-1 text-xs text-zinc-500">
+                    {unpinned === events.length
+                        ? 'Ninguno tiene ubicación en el mapa'
+                        : `${unpinned} sin ubicación en el mapa`}
+                </p>
+            )}
             <ul className="divide-y divide-zinc-100">
                 {events.map((e) => (
                     <li key={e.id}>
@@ -44,6 +55,7 @@ export default function EventList({ events, isPending, isError }: Props) {
                             </span>
                             <span className="block text-xs text-zinc-500">
                                 {formatDateTime(e.startAt)}
+                                {e.venueName && ` · ${e.venueName}`}
                             </span>
                             <span className="mt-1 flex flex-wrap gap-1">
                                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
@@ -55,6 +67,11 @@ export default function EventList({ events, isPending, isError }: Props) {
                                 {e.state === 'cancelled' && (
                                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
                                         Cancelado
+                                    </span>
+                                )}
+                                {!e.location && (
+                                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
+                                        Sin ubicación
                                     </span>
                                 )}
                             </span>

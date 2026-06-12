@@ -40,6 +40,7 @@ const eventSelection = {
     endAt: events.endAt,
     lng: sql<number | null>`ST_X(${events.location}::geometry)`,
     lat: sql<number | null>`ST_Y(${events.location}::geometry)`,
+    venueName: events.venueName,
     sourceUrl: events.sourceUrl,
 };
 
@@ -55,6 +56,7 @@ type EventRow = {
     endAt: Date | null;
     lng: number | null;
     lat: number | null;
+    venueName: string | null;
     sourceUrl: string | null;
 };
 
@@ -70,6 +72,7 @@ function toEventResponse(row: EventRow): EventResponse {
         startAt: row.startAt.toISOString(),
         endAt: row.endAt ? row.endAt.toISOString() : null,
         location: row.lng != null && row.lat != null ? { lng: row.lng, lat: row.lat } : null,
+        venueName: row.venueName,
         sourceUrl: row.sourceUrl,
     };
 }

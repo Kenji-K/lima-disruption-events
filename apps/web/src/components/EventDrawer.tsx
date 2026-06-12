@@ -38,6 +38,14 @@ export default function EventDrawer() {
                 <dl className="space-y-3 p-4">
                     <Field label="Inicio">{formatDateTime(event.startAt)}</Field>
                     {event.endAt && <Field label="Fin">{formatDateTime(event.endAt)}</Field>}
+                    {/* A venue name is a place; raw coordinates are a last resort
+                        and "sin ubicación" is said out loud (reviews G16/G6). */}
+                    <Field label="Lugar">
+                        {event.venueName ??
+                            (event.location
+                                ? `${event.location.lat.toFixed(5)}, ${event.location.lng.toFixed(5)}`
+                                : 'Sin ubicación en el mapa')}
+                    </Field>
                     <Field label="Categoría">{categoryLabel(event.category)}</Field>
                     <Field label="Estado">
                         {event.state === 'cancelled' ? (
@@ -64,11 +72,6 @@ export default function EventDrawer() {
                             </>
                         )}
                     </Field>
-                    {event.location && (
-                        <Field label="Ubicación">
-                            {event.location.lat.toFixed(5)}, {event.location.lng.toFixed(5)}
-                        </Field>
-                    )}
                 </dl>
             )}
         </div>

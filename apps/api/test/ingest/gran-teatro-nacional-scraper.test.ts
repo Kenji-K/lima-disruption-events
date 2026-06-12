@@ -14,8 +14,10 @@ const fixtureHtml = readFileSync(
 describe('granTeatroNacionalScraper / parseCalendarHtml', () => {
     const events = parseCalendarHtml(fixtureHtml);
 
-    it('parses every event-occurrence anchor (25 in May 2026 fixture)', () => {
-        expect(events).toHaveLength(25);
+    it('parses every public event-occurrence anchor (15 in May 2026 fixture)', () => {
+        // The fixture renders 25 occurrence anchors; 10 are montaje/descanso
+        // stage-calendar filler, dropped per review G4 (see test below).
+        expect(events).toHaveLength(15);
     });
 
     it('every event passes scrapedEventSchema', () => {
@@ -62,14 +64,17 @@ describe('granTeatroNacionalScraper / parseCalendarHtml', () => {
 
     it('preserves GTN categories verbatim, with proximamente fallback for uncategorized', () => {
         const categories = new Set(events.map((e) => e.category));
-        // From the May 2026 fixture: cat-folclore, cat-montaje, cat-musica, plus events
-        // with no cat-* class (popup label "Próximamente") which fall back to 'proximamente'.
-        expect(categories).toEqual(new Set(['folclore', 'montaje', 'musica', 'proximamente']));
+        // From the May 2026 fixture: cat-folclore, cat-musica, plus events with
+        // no cat-* class (popup label "Próximamente") → 'proximamente' fallback.
+        expect(categories).toEqual(new Set(['folclore', 'musica', 'proximamente']));
     });
 
-    it('includes maintenance entries (montaje) — disruption-ingestion lossless capture', () => {
-        const montaje = events.filter((e) => e.category === 'montaje');
-        expect(montaje.length).toBeGreaterThan(0);
+    it('drops montaje/descanso stage-calendar filler (review G4 reversed lossless capture)', () => {
+        // The fixture carries cat-montaje cells; none may survive as events —
+        // they are the theatre's internal calendar, not public disruptions.
+        expect(events.filter((e) => e.category === 'montaje' || e.category === 'descanso')).toEqual(
+            [],
+        );
     });
 
     it('returns [] for a month whose grid renders with no event anchors (unpublished month)', () => {

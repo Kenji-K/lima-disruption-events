@@ -88,6 +88,7 @@ export async function upsertEvents(
         externalId: r.externalId,
         regionId: lima.id,
         title: r.title,
+        venueName: r.venueName ?? null,
         category: r.category,
         state: r.state,
         startAt: new Date(r.startAt),
@@ -107,6 +108,7 @@ export async function upsertEvents(
             target: [events.sourceId, events.externalId],
             set: {
                 title: sql`excluded.title`,
+                venueName: sql`excluded.venue_name`,
                 category: sql`excluded.category`,
                 state: sql`excluded.state`,
                 startAt: sql`excluded.start_at`,

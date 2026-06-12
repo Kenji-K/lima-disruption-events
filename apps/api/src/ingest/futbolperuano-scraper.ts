@@ -128,6 +128,7 @@ export function parseMatchHtml(html: string, path: string): ScrapedEvent {
         state,
         startAt: item.startDate,
         endAt: item.endDate,
+        venueName: venue.stadiumName,
         location: venue.location,
         sourceUrl: `${BASE_URL}${path}`,
         sourcePayload: {

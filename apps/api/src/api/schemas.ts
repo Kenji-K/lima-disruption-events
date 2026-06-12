@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { apiEventSchema, apiRoadAlertSchema, type ApiEvent } from '@disruption-intelligence/shared';
+import {
+    apiEventSchema,
+    apiRoadAlertSchema,
+    apiSourceStatusSchema,
+    type ApiEvent,
+} from '@disruption-intelligence/shared';
 
 // Canonical event shape served by the API — lives in @disruption-intelligence/shared
 // as the cross-boundary contract with apps/web. Re-exported here so route schemas
@@ -38,18 +43,10 @@ export const eventIdParamsSchema = z.object({
     id: z.coerce.number().int().positive().max(2_147_483_647),
 });
 
-/** Per-source ingest freshness (ADR-007's ingest_state, Tier-2 visibility).
- *  Ops-facing — not part of the web contract in @disruption-intelligence/shared.
- *  Deliberately EXCLUDES lastError text: the API is public (no auth in v1) and
- *  raw error strings can leak internals; timestamps + failure counts carry the
- *  freshness signal, full detail lives in logs/Sentry/DB. */
-export const sourceStatusSchema = z.object({
-    sourceId: z.string(),
-    lastRunAt: z.iso.datetime().nullable(),
-    lastSuccessAt: z.iso.datetime().nullable(),
-    lastErrorAt: z.iso.datetime().nullable(),
-    consecutiveFailures: z.number().int(),
-});
+// Per-source ingest freshness (ADR-007's ingest_state, Tier-2 visibility).
+// Promoted into @disruption-intelligence/shared once the web freshness chip
+// started consuming it — it IS the web contract now.
+export const sourceStatusSchema = apiSourceStatusSchema;
 
 export const healthzOkSchema = z.object({
     status: z.literal('ok'),

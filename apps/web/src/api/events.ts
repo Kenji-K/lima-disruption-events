@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { apiEventSchema, type ApiEvent } from '@disruption-intelligence/shared';
 import { env } from '../env';
@@ -31,7 +31,15 @@ async function fetchEvent(id: string): Promise<ApiEvent> {
 }
 
 export function useEvents(filters: EventFilters) {
-    return useQuery({ queryKey: ['events', filters], queryFn: () => fetchEvents(filters) });
+    return useQuery({
+        queryKey: ['events', filters],
+        queryFn: () => fetchEvents(filters),
+        // Filter changes render the previous list while the new one loads, and
+        // a fresh-enough cache skips the refetch flash entirely (review/backlog:
+        // list+marker flash on every filter touch).
+        staleTime: 60 * 1000,
+        placeholderData: keepPreviousData,
+    });
 }
 
 export function useEvent(id: string | undefined) {

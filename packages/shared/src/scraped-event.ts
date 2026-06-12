@@ -11,6 +11,9 @@ export const scrapedEventSchema = z
         location: locationSchema.optional(),
         state: z.enum(['scheduled', 'cancelled']),
         category: z.string().min(1),
+        /** Human-readable venue/place name ("Estadio Monumental") for sources
+         *  that know it; omit when the source has no venue concept (news). */
+        venueName: z.string().min(1).optional(),
         sourcePayload: z.unknown(),
         // http(s) only: a bare z.url() accepts javascript: URLs, and sourceUrl ends
         // up in customer-facing <a href> — a scraper copying a raw upstream href

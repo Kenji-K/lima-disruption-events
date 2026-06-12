@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router';
 import type { ApiEvent } from '@disruption-intelligence/shared';
+import { DEFAULT_WINDOW_DAYS, limaDateString } from '../dates';
 import { categoryLabel, sourceLabel } from '../format';
 
 const FILTER_KEYS = ['from', 'to', 'category', 'source'] as const;
@@ -40,11 +41,13 @@ export default function FilterBar({ events }: { events: ApiEvent[] }) {
 
     return (
         <div className="flex flex-wrap items-end gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-2">
+            {/* Date inputs show the EFFECTIVE window: absent params mean the
+                default hoy→+30d view (MapPage), not "no filter". */}
             <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-zinc-600">Desde</span>
                 <input
                     type="date"
-                    value={params.get('from') ?? ''}
+                    value={params.get('from') ?? limaDateString(0)}
                     onChange={(e) => setParam('from', e.target.value)}
                     className={inputClass}
                 />
@@ -53,7 +56,7 @@ export default function FilterBar({ events }: { events: ApiEvent[] }) {
                 <span className="text-xs font-medium text-zinc-600">Hasta</span>
                 <input
                     type="date"
-                    value={params.get('to') ?? ''}
+                    value={params.get('to') ?? limaDateString(DEFAULT_WINDOW_DAYS)}
                     onChange={(e) => setParam('to', e.target.value)}
                     className={inputClass}
                 />
