@@ -50,6 +50,13 @@
       "when": 1781228241495,
       "tag": "0006_dark_mercury",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781245846717,
+      "tag": "0007_heavy_doctor_strange",
+      "breakpoints": true
     }
   ]
 }

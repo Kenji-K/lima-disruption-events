@@ -36,6 +36,9 @@ export const events = pgTable(
             .notNull()
             .references(() => regions.id),
         title: text().notNull(),
+        /** Nullable. Human-readable venue/place name ("Estadio Monumental") for
+         *  sources that know it; news-derived events have no venue concept. */
+        venueName: text(),
         /** Open set of categories ('concert', 'sport', 'road_closure', ...). Canonical list lives
          *  in the API/Zod layer, not the DB — sources reveal new categories over time. */
         category: text().notNull(),
