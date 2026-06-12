@@ -8,6 +8,7 @@
         "start": "tsx src/main.ts",
         "ingest": "tsx src/ingest/index.ts",
         "import-events": "tsx src/ingest/import-cli.ts",
+        "audit-gates": "tsx src/ingest/gate-audit-cli.ts",
         "cron": "tsx src/cron.ts",
         "test": "vitest run",
         "test:watch": "vitest"

@@ -31,6 +31,13 @@ const isRealDate = ({ y, m, d }: PlainDate): boolean => {
     return dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 };
 
+/** ADR-011 date-past guard: true when the range's last day is strictly before
+ *  `day` — the post reports something past instead of announcing it. */
+export const rangeEndsBefore = (range: DateRange, day: PlainDate): boolean => {
+    const end = range.end ?? range.start;
+    return Date.UTC(end.y, end.m - 1, end.d) < Date.UTC(day.y, day.m - 1, day.d);
+};
+
 /** Lima is fixed UTC-5 (no DST): whole-day timestamps carry a -05:00 literal. */
 export const toStartIso = ({ y, m, d }: PlainDate): string =>
     `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T00:00:00-05:00`;

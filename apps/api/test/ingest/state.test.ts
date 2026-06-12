@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { pino } from 'pino';
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
-import { db, ingestState } from '@disruption-intelligence/db';
+import { db, ingestQuarantine, ingestState } from '@disruption-intelligence/db';
 import { runFirstRunCatchUp, runIngestOnce } from '../../src/ingest/run';
 import { getCursor, recordFailure, recordSuccess } from '../../src/ingest/state';
-import type { Scraper } from '../../src/ingest/types';
+import type { QuarantinedPost, Scraper } from '../../src/ingest/types';
 
 const silentLog = pino({ level: 'silent' });
 
@@ -141,6 +141,57 @@ describe('runIngestOnce cursor wiring (ADR-007)', () => {
 
         expect((await stateRow('wire-pair-fail'))?.consecutiveFailures).toBe(1);
         expect(await getCursor('wire-pair-ok')).toEqual({ after: 'ok' });
+    });
+});
+
+describe('runIngestOnce quarantine wiring (ADR-011)', () => {
+    const entry = (reason: QuarantinedPost['reason']): QuarantinedPost => ({
+        sourceId: 'quar-src',
+        externalId: 'post-7',
+        title: 'RECUPERAMOS LA VÍA',
+        url: 'https://example.test/post-7',
+        reason,
+        postDate: '2026-06-11T10:00:00-05:00',
+        detail: { matchedKeywords: ['cierre'] },
+    });
+    const scraperWith = (reason: QuarantinedPost['reason']): Scraper => ({
+        name: 'quar-src',
+        scrape: () =>
+            Promise.resolve({
+                events: [],
+                quarantined: [entry(reason)],
+                sweepWindowEnd: null,
+            }),
+    });
+    const quarRows = () =>
+        db
+            .select()
+            .from(ingestQuarantine)
+            .where(
+                and(
+                    eq(ingestQuarantine.sourceId, 'quar-src'),
+                    eq(ingestQuarantine.externalId, 'post-7'),
+                ),
+            );
+
+    it('persists quarantined posts idempotently and refreshes the verdict on re-runs', async () => {
+        await runIngestOnce(silentLog, [scraperWith('past-event')]);
+        let rows = await quarRows();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.reason).toBe('past-event');
+        expect(rows[0]?.detail).toEqual({ matchedKeywords: ['cierre'] });
+        expect(rows[0]?.postDate?.toISOString()).toBe('2026-06-11T15:00:00.000Z');
+        const firstSeen = rows[0]!.firstSeenAt;
+
+        // Re-run with a re-tuned verdict: same row, new reason, firstSeenAt kept.
+        await runIngestOnce(silentLog, [scraperWith('no-road-context')]);
+        rows = await quarRows();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.reason).toBe('no-road-context');
+        expect(rows[0]?.firstSeenAt).toEqual(firstSeen);
+        expect(rows[0]?.lastSeenAt.getTime()).toBeGreaterThanOrEqual(firstSeen.getTime());
+        // The quarantine is measurement, not failure: the source still succeeds.
+        expect((await stateRow('quar-src'))?.consecutiveFailures).toBe(0);
     });
 });
 

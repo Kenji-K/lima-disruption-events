@@ -8,12 +8,18 @@ import {
     extractDateRange,
     normalize,
     parseSpanishDate,
+    rangeEndsBefore,
     toEndIso,
     toStartIso,
     type PlainDate,
 } from './extract-dates';
-import { matchRoadDisruption, ROAD_MENTION_RE } from './road-filter';
-import type { ScrapeResult } from './types';
+import {
+    CLOSURE_KEYWORD_RE,
+    DISRUPTION_TRIGGER_RE,
+    matchRoadDisruption,
+    ROAD_MENTION_RE,
+} from './road-filter';
+import type { QuarantinedPost, ScrapeResult } from './types';
 
 /** gob.pe multi-institution news job (V1-BRIEF Tier 2 item 1).
  *
@@ -27,28 +33,27 @@ import type { ScrapeResult } from './types';
  *  Two-phase politeness: trigger scan over the listing's title+description
  *  first, detail-page fetch only for the few keyword-positive items; full
  *  road-context gates then run over the detail text (the listing description
- *  is truncated ~150 chars — dates and road context live in the body). */
+ *  is truncated ~150 chars — dates and road context live in the body).
+ *  Trigger vocabulary + gates per ADR-011 (shared with MML in road-filter.ts);
+ *  keyword-positive rejects are quarantined, never silently dropped. */
 
 export const GOB_PE_INSTITUTIONS = ['atu', 'sutran', 'mtc', 'munilima'] as const;
 export type GobPeInstitution = (typeof GOB_PE_INSTITUTIONS)[number];
 
 const DETAIL_DELAY_MS = 2000;
 
-// MML's tuned trigger list plus ATU/SUTRAN operational vocabulary: future-tense
-// verbs ("desviará su recorrido") and restriction/suspension terms, all common
-// in transit-authority announcements and absent from municipal prose.
-const GOB_TRIGGER_RE =
-    /\b(cierres?|cerrad[oa]s?|cerraran?|cortes?|clausur(?:as?|ad[oa]s?)|desvios?|desviaran?|interferencias?|restriccion(?:es)?|restringid[oa]s?|interrumpid[oa]s?|suspension(?:es)?|suspendid[oa]s?|suspenderan?)\b/g;
-
 // SUTRAN/MTC are national institutions; the product is Lima. A post must name
-// Lima Metropolitana context to count. ATU and munilima are Lima by mandate.
-const NATIONAL_INSTITUTIONS: ReadonlySet<GobPeInstitution> = new Set(['sutran', 'mtc']);
-const LIMA_CONTEXT_RE =
-    /\b(lima|callao|metropolitano|panamericana (?:norte|sur)|carretera central|evitamiento|costa verde|javier prado|ramiro priale|cercado)\b/;
-
-// Closure-shaped keywords (matched form, already normalized) → road_closure;
-// anything else that survived the gates is announcing works/restrictions.
-const CLOSURE_KEYWORD_RE = /^(cierre|cerrad|cerrara|corte|clausur|desvi|interrumpid)/;
+// Lima-Metropolitana context to count. ATU and munilima are Lima by mandate.
+// ADR-011 (review A1): POSITIVE Lima-metro vocabulary — metro phrases, Callao,
+// unambiguous district names, and metro arteries. Bare `lima` (SUTRAN dateline
+// boilerplate let a Rioja post through) and bare national-road names
+// (`panamericana sur` matched a Nazca km-461 closure) are deliberately out.
+// Collision-prone district names are excluded: `comas` (Junín corridor town),
+// `san luis` / `santa rosa` (Áncash/Junín homonyms). Exported for the
+// gate-audit CLI.
+export const NATIONAL_INSTITUTIONS: ReadonlySet<GobPeInstitution> = new Set(['sutran', 'mtc']);
+export const LIMA_CONTEXT_RE =
+    /\b(lima metropolitana|lima (?:norte|sur|este)|cercado de lima|callao|ventanilla|carmen de la legua|metropolitano\b|costa verde|javier prado|ramiro priale|vias? expresas?|paseo de la republica|morales duarez|nestor gambetta|jorge chavez|huachipa|ancon|ate|barranco|brena|carabayllo|chaclacayo|chorrillos|cieneguilla|el agustino|independencia|jesus maria|la molina|la victoria|lince|los olivos|lurigancho|chosica|lurin|magdalena del mar|miraflores|pachacamac|pucusana|pueblo libre|puente piedra|punta hermosa|punta negra|rimac|san bartolo|san borja|san isidro|san juan de lurigancho|san juan de miraflores|san martin de porres|san miguel\b|santa anita|santiago de surco|surquillo|villa el salvador|villa maria del triunfo|jiron de la union)\b/;
 
 const noticiaSchema = z.object({
     title: z.string().min(1),
@@ -105,17 +110,23 @@ export function parseNoticiasJson(json: string, institution: GobPeInstitution): 
  *  items earn a detail fetch. Road context is NOT required here — the
  *  truncated description often cuts it off; the full gates run on the body. */
 export function passesPrefilter(item: GobPeNewsItem): boolean {
-    return normalize(`${item.title}\n${item.description}`).match(GOB_TRIGGER_RE) !== null;
+    return normalize(`${item.title}\n${item.description}`).match(DISRUPTION_TRIGGER_RE) !== null;
 }
 
-/** Phase-2 extraction over the detail page. Null = not a Lima road disruption.
+/** Per-item gate verdict (ADR-011) — see mml-scraper's ExtractionOutcome. */
+export type GobPeExtractionOutcome =
+    | { kind: 'event'; event: ScrapedEvent }
+    | { kind: 'quarantined'; entry: QuarantinedPost };
+
+/** Phase-2 extraction over the detail page. Items reaching this point were
+ *  listing-keyword-positive, so every rejection is quarantined (even a body
+ *  no-trigger — the truncated description promised more than the body holds).
  *  Exported for fixture-driven tests. */
 export function extractGobPeEvent(
     item: GobPeNewsItem,
     detailHtml: string,
     institution: GobPeInstitution,
-    log?: Logger,
-): ScrapedEvent | null {
+): GobPeExtractionOutcome {
     const $ = cheerio.load(detailHtml);
     const main = $('main');
     if (main.length === 0) {
@@ -128,31 +139,48 @@ export function extractGobPeEvent(
     const text = `${item.title}\n${main.text()}`;
     const norm = normalize(text);
 
-    const gate = matchRoadDisruption(norm, GOB_TRIGGER_RE);
+    const quarantine = (
+        reason: QuarantinedPost['reason'],
+        detail?: Record<string, unknown>,
+    ): GobPeExtractionOutcome => ({
+        kind: 'quarantined',
+        entry: {
+            sourceId: `gob-pe-${institution}`,
+            externalId: String(item.id),
+            title: item.title,
+            url: item.url,
+            reason,
+            postDate: toStartIso(item.published),
+            ...(detail ? { detail } : {}),
+        },
+    });
+
+    const gate = matchRoadDisruption(norm);
     if (gate.keywords === null) {
-        if (gate.reason === 'no-road-context') {
-            log?.debug(
-                { institution, newsId: item.id },
-                'gob-pe: trigger without nearby road context',
-            );
-        }
-        return null;
+        return quarantine(gate.reason);
     }
 
     if (NATIONAL_INSTITUTIONS.has(institution) && !LIMA_CONTEXT_RE.test(norm)) {
-        log?.debug({ institution, newsId: item.id }, 'gob-pe: disruption outside Lima — skipped');
-        return null;
+        return quarantine('non-lima', { matchedKeywords: gate.keywords });
     }
 
     // Announced window when the text has one, else the publication date — the
     // announcement describes conditions in effect around publication.
     const range = extractDateRange(text, item.published);
+    // ADR-011 date-past guard. The publication-date fallback below can never
+    // trip it — a fallback window equals the post date by construction.
+    if (range && rangeEndsBefore(range, item.published)) {
+        return quarantine('past-event', {
+            matchedKeywords: gate.keywords,
+            matchedDate: range.raw,
+        });
+    }
     const startAt = range ? toStartIso(range.start) : toStartIso(item.published);
     const endAt = range?.end ? toEndIso(range.end) : undefined;
 
     const roadMentions = [...new Set([...text.matchAll(ROAD_MENTION_RE)].map((m) => m[0].trim()))];
 
-    return {
+    const event: ScrapedEvent = {
         sourceId: `gob-pe-${institution}`,
         externalId: String(item.id),
         title: item.title,
@@ -176,6 +204,7 @@ export function extractGobPeEvent(
         // replicate across channels.
         ...(newsDedupKey(item.title) ? { dedupKey: newsDedupKey(item.title) } : {}),
     };
+    return { kind: 'event', event };
 }
 
 export function createGobPeScraper(institution: GobPeInstitution) {
@@ -200,6 +229,7 @@ export function createGobPeScraper(institution: GobPeInstitution) {
         const candidates = fresh.filter(passesPrefilter);
 
         const events: ScrapedEvent[] = [];
+        const quarantined: QuarantinedPost[] = [];
         for (const item of candidates) {
             // Any detail failure aborts the source run — the cursor stays
             // frozen and the next run re-covers the same ids (upserts are
@@ -212,8 +242,9 @@ export function createGobPeScraper(institution: GobPeInstitution) {
                     `gob-pe-${institution}: detail fetch failed for news ${item.id} (${detail.reason})`,
                 );
             }
-            const event = extractGobPeEvent(item, detail.html, institution, log);
-            if (event) events.push(event);
+            const result = extractGobPeEvent(item, detail.html, institution);
+            if (result.kind === 'event') events.push(result.event);
+            else quarantined.push(result.entry);
         }
 
         const maxId = items.reduce((acc, i) => Math.max(acc, i.id), lastId);
@@ -224,6 +255,7 @@ export function createGobPeScraper(institution: GobPeInstitution) {
                 newItems: fresh.length,
                 detailFetches: candidates.length,
                 eventsExtracted: events.length,
+                quarantined: quarantined.length,
                 nextLastId: maxId,
             },
             'gob-pe: scrape complete',
@@ -231,6 +263,7 @@ export function createGobPeScraper(institution: GobPeInstitution) {
 
         return {
             events,
+            quarantined,
             sweepWindowEnd: null, // incremental news poll — never sweeps (ADR-007)
             ...(maxId > lastId || !parsedCursor.success ? { nextCursor: { lastId: maxId } } : {}),
         };

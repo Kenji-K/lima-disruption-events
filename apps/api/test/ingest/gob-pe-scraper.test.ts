@@ -76,13 +76,16 @@ describe('parseNoticiasJson — live fixtures (captured 2026-06-11)', () => {
 });
 
 describe('passesPrefilter — trigger scan over title+description', () => {
-    it('matches exactly the two trigger-bearing items across all four fixtures', () => {
+    it('matches exactly the one trigger-bearing item across all four fixtures', () => {
+        // 1404232 (cochera clausura) matched under the pre-ADR-011 vocabulary;
+        // dropping 'clausura' (premises enforcement, never a road) removes it
+        // at the cheapest possible stage — no detail fetch spent on it.
         const hits = Object.values(listings)
             .flat()
             .filter(passesPrefilter)
             .map((i) => i.id)
             .sort();
-        expect(hits).toEqual([1399490, 1404232]);
+        expect(hits).toEqual([1399490]);
     });
 
     it('rejects the munilima corredor mirror item (no disruption trigger)', () => {
@@ -101,34 +104,75 @@ describe('extractGobPeEvent — detail fixtures', () => {
         published: { y: 2025, m: 9, d: 13 },
     };
 
+    const eventOf = (outcome: ReturnType<typeof extractGobPeEvent>) => {
+        expect(outcome.kind).toBe('event');
+        return outcome.kind === 'event' ? outcome.event : (undefined as never);
+    };
+
     it('turns the ATU desvío announcement into a road_closure event', () => {
-        const event = extractGobPeEvent(
-            desvioItem,
-            fixture('gob-pe-detail-atu-desvio.html'),
-            'atu',
+        const event = eventOf(
+            extractGobPeEvent(desvioItem, fixture('gob-pe-detail-atu-desvio.html'), 'atu'),
         );
-        expect(event).not.toBeNull();
         expect(() => scrapedEventSchema.parse(event)).not.toThrow();
-        expect(event!.sourceId).toBe('gob-pe-atu');
-        expect(event!.externalId).toBe('1245756');
-        expect(event!.category).toBe('road_closure');
+        expect(event.sourceId).toBe('gob-pe-atu');
+        expect(event.externalId).toBe('1245756');
+        expect(event.category).toBe('road_closure');
         // "desde el lunes 15 de setiembre" in the headline, year-anchored to the post.
-        expect(event!.startAt).toBe('2025-09-15T00:00:00-05:00');
-        expect(event!.sourceUrl).toBe(desvioItem.url);
-        expect(event!.dedupKey).toBe(newsDedupKey(desvioItem.title));
-        const payload = event!.sourcePayload as { institution: string; matchedKeywords: string[] };
+        expect(event.startAt).toBe('2025-09-15T00:00:00-05:00');
+        expect(event.sourceUrl).toBe(desvioItem.url);
+        expect(event.dedupKey).toBe(newsDedupKey(desvioItem.title));
+        const payload = event.sourcePayload as { institution: string; matchedKeywords: string[] };
         expect(payload.institution).toBe('atu');
         expect(payload.matchedKeywords).toContain('desvios');
     });
 
-    it('rejects the SUTRAN cochera clausura (trigger without proximate road context)', () => {
+    it('extracts the Vía Expresa "cierran" closure the pre-ADR-011 vocabulary missed', () => {
+        // The 60-day audit's one confirmed recall miss: a real forward-looking
+        // Lima closure announced in third-person present ("cierran"), a tense
+        // the old trigger list did not cover.
+        const item: GobPeNewsItem = {
+            id: 1394289,
+            title: 'Desde el 20 de mayo: cierran temporalmente acceso a la Vía Expresa por obras del túnel que integrará la Línea 2 con el Metropolitano',
+            description: 'A partir de este miércoles 20 de mayo se cerrará el acceso.',
+            url: 'https://www.gob.pe/institucion/atu/noticias/1394289-cierre-via-expresa',
+            published: { y: 2026, m: 5, d: 19 },
+        };
+        const event = eventOf(
+            extractGobPeEvent(item, fixture('gob-pe-detail-atu-via-expresa-cierran.html'), 'atu'),
+        );
+        expect(event.category).toBe('road_closure');
+        expect(event.startAt).toBe('2026-05-20T00:00:00-05:00');
+        const payload = event.sourcePayload as { matchedKeywords: string[] };
+        expect(payload.matchedKeywords).toContain('cierran');
+    });
+
+    it('quarantines the Nazca Panamericana closure as non-lima (review A1 regression)', () => {
+        // Real disruption, wrong geography: km 461 of the Panamericana Sur is
+        // ~450 km from Lima. The old gate passed it on the bare road name.
+        const item: GobPeNewsItem = {
+            id: 1399502,
+            title: 'MTC: Habilitan desvío provisional tras cierre preventivo del Pontón ubicado en el km 461 de la Panamericana Sur, en Nazca',
+            description: 'Se habilitó un desvío provisional.',
+            url: 'https://www.gob.pe/institucion/mtc/noticias/1399502-desvio-nazca',
+            published: { y: 2026, m: 5, d: 29 },
+        };
+        const outcome = extractGobPeEvent(item, fixture('gob-pe-detail-mtc-nazca.html'), 'mtc');
+        expect(outcome.kind).toBe('quarantined');
+        if (outcome.kind === 'quarantined') expect(outcome.entry.reason).toBe('non-lima');
+    });
+
+    it('quarantines the SUTRAN cochera clausura (premises enforcement, not a road)', () => {
+        // ADR-011 dropped 'clausura' from the triggers; the post reaches the
+        // detail stage only via other body keywords, and must end quarantined.
         const cochera = listings.sutran.find((i) => i.id === 1404232)!;
-        const event = extractGobPeEvent(
+        const outcome = extractGobPeEvent(
             cochera,
             fixture('gob-pe-detail-sutran-cochera.html'),
             'sutran',
         );
-        expect(event).toBeNull();
+        expect(outcome.kind).toBe('quarantined');
+        if (outcome.kind !== 'quarantined') return;
+        expect(['no-trigger', 'no-road-context', 'non-lima']).toContain(outcome.entry.reason);
     });
 
     it('applies the Lima gate to national institutions (sutran/mtc)', () => {
@@ -141,11 +185,30 @@ describe('extractGobPeEvent — detail fixtures', () => {
         };
         const outside =
             '<main>Sutran informa cierre de la carretera Fernando Belaúnde Terry en Amazonas el 15 de junio</main>';
-        expect(extractGobPeEvent(item, outside, 'sutran')).toBeNull();
+        const rejected = extractGobPeEvent(item, outside, 'sutran');
+        expect(rejected.kind).toBe('quarantined');
+        if (rejected.kind === 'quarantined') expect(rejected.entry.reason).toBe('non-lima');
 
         const inLima =
             '<main>Sutran informa cierre de la carretera Central a la altura de Chosica el 15 de junio</main>';
-        expect(extractGobPeEvent(item, inLima, 'sutran')).not.toBeNull();
+        expect(extractGobPeEvent(item, inLima, 'sutran').kind).toBe('event');
+    });
+
+    it('rejects dateline-boilerplate Lima mentions (bare "lima" is not Lima context)', () => {
+        // ADR-011 / review A1: the old gate passed a Rioja (San Martín) post on
+        // SUTRAN's "Lima, 21 de mayo" dateline alone.
+        const item: GobPeNewsItem = {
+            id: 103,
+            title: 'Sutran dispone cierre temporal de un tramo en Rioja',
+            description: '',
+            url: 'https://www.gob.pe/institucion/sutran/noticias/103-cierre',
+            published: { y: 2026, m: 6, d: 10 },
+        };
+        const html =
+            '<main>Lima, 10 de junio de 2026. Sutran dispone el cierre temporal de la carretera Rioja–Tarapoto el 15 de junio.</main>';
+        const outcome = extractGobPeEvent(item, html, 'sutran');
+        expect(outcome.kind).toBe('quarantined');
+        if (outcome.kind === 'quarantined') expect(outcome.entry.reason).toBe('non-lima');
     });
 
     it('skips the Lima gate for Lima-mandate institutions (atu/munilima)', () => {
@@ -157,7 +220,22 @@ describe('extractGobPeEvent — detail fixtures', () => {
             published: { y: 2026, m: 6, d: 10 },
         };
         const html = '<main>Cierre de la avenida Arequipa por trabajos el 15 de junio</main>';
-        expect(extractGobPeEvent(item, html, 'atu')).not.toBeNull();
+        expect(extractGobPeEvent(item, html, 'atu').kind).toBe('event');
+    });
+
+    it('quarantines a window that ended before publication (ADR-011 date-past guard)', () => {
+        const item: GobPeNewsItem = {
+            id: 104,
+            title: 'Cierre de la avenida Argentina se realizó del 1 al 3 de junio',
+            description: '',
+            url: 'https://www.gob.pe/institucion/munilima/noticias/104-cierre',
+            published: { y: 2026, m: 6, d: 8 },
+        };
+        const html =
+            '<main>El cierre de la avenida Argentina se realizó del 1 al 3 de junio con desvíos.</main>';
+        const outcome = extractGobPeEvent(item, html, 'munilima');
+        expect(outcome.kind).toBe('quarantined');
+        if (outcome.kind === 'quarantined') expect(outcome.entry.reason).toBe('past-event');
     });
 
     it('falls back to the publication date when the text has no extractable date', () => {
@@ -169,8 +247,8 @@ describe('extractGobPeEvent — detail fixtures', () => {
             published: { y: 2026, m: 6, d: 9 },
         };
         const html = '<main>Cierre temporal del puente Ricardo Palma por seguridad vial</main>';
-        const event = extractGobPeEvent(item, html, 'munilima');
-        expect(event?.startAt).toBe('2026-06-09T00:00:00-05:00');
+        const event = eventOf(extractGobPeEvent(item, html, 'munilima'));
+        expect(event.startAt).toBe('2026-06-09T00:00:00-05:00');
     });
 
     it('throws when the detail page has no <main> (markup contract break)', () => {

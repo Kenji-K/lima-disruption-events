@@ -11,6 +11,7 @@ import { createGobPeScraper, GOB_PE_INSTITUTIONS } from './gob-pe-scraper';
 import { joinnusScraper, JOINNUS_SOURCE_ID } from './joinnus-scraper';
 import { costa21Scraper, COSTA21_SOURCE_ID } from './costa21-scraper';
 import { upsertEvents } from './upsert';
+import { recordQuarantine } from './quarantine';
 import { runRoadAlertSyncOnce } from './sutran-alerts';
 import { cancelMissingEvents } from './sweep';
 import { getCursor, listKnownSourceIds, recordFailure, recordSuccess } from './state';
@@ -66,6 +67,7 @@ export async function runIngestOnce(log: Logger, scrapers: Scraper[] = SCRAPERS)
     let updated = 0;
     let cancelled = 0;
     let suppressed = 0;
+    let quarantined = 0;
     const failedSources: string[] = [];
 
     // Per-source isolation: scrape → validate → upsert → sweep per scraper, so one
@@ -73,9 +75,24 @@ export async function runIngestOnce(log: Logger, scrapers: Scraper[] = SCRAPERS)
     for (const { name, scrape } of scrapers) {
         try {
             const cursor = await getCursor(name);
-            const { events: raw, sweepWindowEnd, nextCursor } = await scrape(runLog, cursor);
+            const {
+                events: raw,
+                quarantined: rejects,
+                sweepWindowEnd,
+                nextCursor,
+            } = await scrape(runLog, cursor);
             const validated = scrapedEventSchema.array().parse(raw);
             const counts = await upsertEvents(validated);
+
+            // ADR-011: keyword-positive gate rejections land in
+            // ingest_quarantine. Measurement, not data — a write failure is
+            // logged and never fails the source run.
+            if (rejects?.length) {
+                quarantined += rejects.length;
+                await recordQuarantine(rejects).catch((qErr: unknown) => {
+                    runLog.error({ source: name, err: qErr }, 'quarantine write failed');
+                });
+            }
             inserted += counts.inserted;
             updated += counts.updated;
             suppressed += counts.suppressed.length;
@@ -129,7 +146,7 @@ export async function runIngestOnce(log: Logger, scrapers: Scraper[] = SCRAPERS)
 
     const durationMs = Date.now() - startedAt;
     runLog.info(
-        { inserted, updated, cancelled, suppressed, failedSources, durationMs },
+        { inserted, updated, cancelled, suppressed, quarantined, failedSources, durationMs },
         'ingest run complete',
     );
 }

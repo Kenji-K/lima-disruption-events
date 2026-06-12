@@ -4,9 +4,15 @@ import { z } from 'zod';
 import type { Logger } from 'pino';
 import { newsDedupKey, type ScrapedEvent } from '@disruption-intelligence/shared';
 import { fetchWithRetry } from './fetch';
-import { extractDateRange, normalize, toEndIso, toStartIso } from './extract-dates';
-import { matchRoadDisruption, ROAD_MENTION_RE } from './road-filter';
-import type { ScrapeResult } from './types';
+import {
+    extractDateRange,
+    normalize,
+    rangeEndsBefore,
+    toEndIso,
+    toStartIso,
+} from './extract-dates';
+import { CLOSURE_KEYWORD_RE, matchRoadDisruption, ROAD_MENTION_RE } from './road-filter';
+import type { QuarantinedPost, ScrapeResult } from './types';
 
 export const MML_SOURCE_ID = 'mml';
 const POSTS_URL = 'https://www.munlima.gob.pe/wp-json/wp/v2/posts';
@@ -42,28 +48,43 @@ type WpPost = z.infer<typeof wpPostSchema>;
 
 const cursorSchema = z.object({ after: z.string().min(19) });
 
-/** MML's disruption-trigger vocabulary — precision-tuned against live MML
- *  fixture batches 2026-06-11. The road-context + proximity gates that make
- *  it safe live in road-filter.ts (shared with the gob.pe scraper). */
-const DISRUPTION_TRIGGER_RE =
-    /\b(cierres?|cerrad[oa]s?|cortes?|clausuras?|desvios?|interferencias?)\b/g;
+/** Per-post gate verdict (ADR-011): an event, a quarantined keyword-positive
+ *  reject, or a skip (no trigger / degenerate post — not worth recording). */
+export type ExtractionOutcome =
+    | { kind: 'event'; event: ScrapedEvent }
+    | { kind: 'quarantined'; entry: QuarantinedPost }
+    | { kind: 'skipped' };
 
-/** Pure per-post extraction: null when the post is not a datable road
- *  disruption. Exported for fixture-driven tests. */
-export function extractDisruptionEvent(post: WpPost, log?: Logger): ScrapedEvent | null {
+/** Pure per-post extraction. Trigger vocabulary + gates per ADR-011 (shared
+ *  with gob.pe in road-filter.ts). Exported for fixture-driven tests. */
+export function extractDisruptionEvent(post: WpPost): ExtractionOutcome {
     const title = cheerio.load(post.title.rendered).text().trim();
     const body = cheerio.load(post.content.rendered).text();
-    if (!title) return null; // degenerate posts with empty titles exist in the live feed
+    if (!title) return { kind: 'skipped' }; // degenerate posts with empty titles exist in the live feed
 
     const text = `${title}\n${body}`;
     const norm = normalize(text);
 
-    const gate = matchRoadDisruption(norm, DISRUPTION_TRIGGER_RE);
+    const quarantine = (
+        reason: QuarantinedPost['reason'],
+        detail?: Record<string, unknown>,
+    ): ExtractionOutcome => ({
+        kind: 'quarantined',
+        entry: {
+            sourceId: MML_SOURCE_ID,
+            externalId: String(post.id),
+            title,
+            url: post.link,
+            reason,
+            postDate: `${post.date}-05:00`, // WP dates are site-local Lima time
+            ...(detail ? { detail } : {}),
+        },
+    });
+
+    const gate = matchRoadDisruption(norm);
     if (gate.keywords === null) {
-        if (gate.reason === 'no-road-context') {
-            log?.debug({ postId: post.id }, 'mml: trigger without nearby road context');
-        }
-        return null;
+        if (gate.reason === 'no-trigger') return { kind: 'skipped' };
+        return quarantine(gate.reason);
     }
     const keywords = gate.keywords;
 
@@ -74,14 +95,18 @@ export function extractDisruptionEvent(post: WpPost, log?: Logger): ScrapedEvent
     };
     const range = extractDateRange(text, postDay);
     if (!range) {
-        log?.debug({ postId: post.id, keywords }, 'mml: keywords but no extractable date');
-        return null;
+        return quarantine('no-date', { matchedKeywords: keywords });
+    }
+    // ADR-011 date-past guard: a window that ended before publication is a
+    // report about the past ("RECUPERAMOS…"), not an announcement.
+    if (rangeEndsBefore(range, postDay)) {
+        return quarantine('past-event', { matchedKeywords: keywords, matchedDate: range.raw });
     }
 
-    const closure = /\b(cierres?|cerrad[oa]s?|cortes?|clausuras?|desvios?)\b/.test(norm);
+    const closure = keywords.some((k) => CLOSURE_KEYWORD_RE.test(k));
     const roadMentions = [...new Set([...text.matchAll(ROAD_MENTION_RE)].map((m) => m[0].trim()))];
 
-    return {
+    const event: ScrapedEvent = {
         sourceId: MML_SOURCE_ID,
         externalId: String(post.id), // immutable WP post ID per ADR-007
         title,
@@ -102,6 +127,7 @@ export function extractDisruptionEvent(post: WpPost, log?: Logger): ScrapedEvent
         // ADR-009 cross-channel key (gob.pe's munilima channel mirrors these posts).
         ...(newsDedupKey(title) ? { dedupKey: newsDedupKey(title) } : {}),
     };
+    return { kind: 'event', event };
 }
 
 /** Pure page parse: validates the WP response shape. Exported for fixture tests. */
@@ -149,21 +175,28 @@ export async function mmlScraper(log: Logger, cursor: unknown): Promise<ScrapeRe
         }
     }
 
-    const events = posts
-        .map((post) => extractDisruptionEvent(post, log))
-        .filter((e): e is ScrapedEvent => e !== null);
+    const outcomes = posts.map((post) => extractDisruptionEvent(post));
+    const events = outcomes.flatMap((o) => (o.kind === 'event' ? [o.event] : []));
+    const quarantined = outcomes.flatMap((o) => (o.kind === 'quarantined' ? [o.entry] : []));
 
     // Cursor = newest fetched post's verbatim local-time date string (`?after=`
     // is strictly-after, so the newest post is not refetched). No posts → leave
     // the stored cursor untouched.
     const newest = posts.at(-1)?.date;
     log.info(
-        { after, postsSeen: posts.length, eventsExtracted: events.length, nextAfter: newest },
+        {
+            after,
+            postsSeen: posts.length,
+            eventsExtracted: events.length,
+            quarantined: quarantined.length,
+            nextAfter: newest,
+        },
         'mml: scrape complete',
     );
 
     return {
         events,
+        quarantined,
         sweepWindowEnd: null, // incremental delta poll — never sweeps (ADR-007)
         ...(newest ? { nextCursor: { after: newest } } : {}),
     };

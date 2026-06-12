@@ -27,25 +27,32 @@ describe('parseMmlPostsJson', () => {
 describe('extractDisruptionEvent — live fixtures', () => {
     const recent = parseMmlPostsJson(recentJson);
     const cierre = parseMmlPostsJson(cierreJson);
+    const events = (posts: ReturnType<typeof parseMmlPostsJson>) =>
+        posts
+            .map((p) => extractDisruptionEvent(p))
+            .flatMap((o) => (o.kind === 'event' ? [o.event] : []));
 
     it('extracts zero events from the mixed recent batch (all municipal noise)', () => {
-        expect(recent.map((p) => extractDisruptionEvent(p)).filter(Boolean)).toHaveLength(0);
+        expect(events(recent)).toHaveLength(0);
     });
 
     it('skips the degenerate empty-title post that exists in the live feed', () => {
         const emptyTitle = recent.find((p) => p.id === 79845);
         expect(emptyTitle).toBeDefined();
-        expect(extractDisruptionEvent(emptyTitle!)).toBeNull();
+        expect(extractDisruptionEvent(emptyTitle!).kind).toBe('skipped');
     });
 
-    it('keeps only the genuine road-disruption posts from the search=cierre batch', () => {
-        const events = cierre.map((p) => extractDisruptionEvent(p)).filter((e) => e !== null);
-        // 78604 + 78558: Semana Santa closures/detours (jr. Cuzco, jirón Amazonas);
-        // 78389 mentions the same street closures inside a church-visit listing.
-        // The other 7 (electoral-campaign "cierre", court-case "corte", budget
-        // "obras", etc.) must NOT survive the trigger+road-context+proximity gate.
-        expect(events.map((e) => e.externalId).sort()).toEqual(['78389', '78558', '78604']);
-        for (const event of events) {
+    it('keeps only the genuine forward-looking road posts from the search=cierre batch', () => {
+        const extracted = events(cierre);
+        // 78389 (posted Mar 27): the pre-Semana-Santa announcement with the
+        // street closures — the only forward-looking disruption in the batch.
+        // 78558 + 78604 were posted Apr 6, the day AFTER the Apr 2–5 closures
+        // they describe ("SE DESPLEGARON", "INTENSIFICAMOS") — the ADR-011
+        // date-past guard quarantines them (asserted below). The other 7
+        // (electoral-campaign "cierre", court-case "corte", budget "obras",
+        // etc.) must NOT survive the trigger+road-context+proximity gate.
+        expect(extracted.map((e) => e.externalId).sort()).toEqual(['78389']);
+        for (const event of extracted) {
             expect(() => scrapedEventSchema.parse(event)).not.toThrow();
             expect(event.sourceId).toBe('mml');
             expect(event.category).toBe('road_closure');
@@ -56,10 +63,54 @@ describe('extractDisruptionEvent — live fixtures', () => {
         }
     });
 
-    it('extracts the date range "del 2 al 5 de abril" on the Jueves Santo post', () => {
-        const event = extractDisruptionEvent(cierre.find((p) => p.id === 78558)!);
-        expect(event?.startAt).toBe('2026-04-02T00:00:00-05:00');
-        expect(event?.endAt).toBe('2026-04-05T23:59:00-05:00');
+    it('quarantines (never silently drops) keyword-positive rejects from the cierre batch', () => {
+        const quarantined = cierre
+            .map((p) => extractDisruptionEvent(p))
+            .flatMap((o) => (o.kind === 'quarantined' ? [o.entry] : []));
+        // ADR-011: everything that matched a trigger but failed a later gate
+        // must surface in the quarantine, with the gate as the reason. The two
+        // posted-after-the-fact Semana Santa reports land here as past-event.
+        const reasons = new Map(quarantined.map((e) => [e.externalId, e.reason]));
+        expect(reasons.get('78558')).toBe('past-event');
+        expect(reasons.get('78604')).toBe('past-event');
+        for (const entry of quarantined) {
+            expect(entry.sourceId).toBe('mml');
+            expect(['no-road-context', 'no-date', 'past-event']).toContain(entry.reason);
+            expect(entry.postDate).toMatch(/-05:00$/);
+        }
+    });
+
+    it('extracts the date range "del 2 al 5 de abril" on the announcement post', () => {
+        const outcome = extractDisruptionEvent(cierre.find((p) => p.id === 78389)!);
+        expect(outcome.kind).toBe('event');
+        if (outcome.kind !== 'event') return;
+        expect(outcome.event.startAt).toBe('2026-04-02T00:00:00-05:00');
+        expect(outcome.event.endAt).toBe('2026-04-05T23:59:00-05:00');
+    });
+});
+
+describe('extractDisruptionEvent — ADR-011 date-past guard (live FP fixtures)', () => {
+    const fixturePost = (name: string) =>
+        parseMmlPostsJson(readFileSync(join(__dirname, 'fixtures', name), 'utf8'))[0]!;
+
+    it('quarantines the completed-works post (RECUPERAMOS…, the prod false positive)', () => {
+        // Work finished May 9, posted May 13 — a report, not an announcement.
+        const outcome = extractDisruptionEvent(fixturePost('mml-post-79391-past-fp.json'));
+        expect(outcome.kind).toBe('quarantined');
+        if (outcome.kind !== 'quarantined') return;
+        expect(outcome.entry.reason).toBe('past-event');
+        expect(outcome.entry.externalId).toBe('79391');
+        expect(outcome.entry.detail).toMatchObject({ matchedDate: '09 de mayo de 2026' });
+    });
+
+    it('quarantines the political INDULTOS post ("cierre de campaña" near "paseo")', () => {
+        // "mitin de cierre de campaña en el paseo de los héroes navales … del
+        // pasado 12 de abril", posted June 11 — the second live false positive.
+        const outcome = extractDisruptionEvent(fixturePost('mml-post-79872-past-fp.json'));
+        expect(outcome.kind).toBe('quarantined');
+        if (outcome.kind !== 'quarantined') return;
+        expect(outcome.entry.reason).toBe('past-event');
+        expect(outcome.entry.externalId).toBe('79872');
     });
 });
 

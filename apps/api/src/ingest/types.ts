@@ -1,8 +1,26 @@
 import type { Logger } from 'pino';
 import type { ScrapedEvent } from '@disruption-intelligence/shared';
 
+/** A keyword-positive post a downstream gate rejected (ADR-011). Scrapers
+ *  return these alongside events; the runner persists them to
+ *  ingest_quarantine so gate recall stays measurable. */
+export type QuarantinedPost = {
+    sourceId: string;
+    externalId: string;
+    title: string;
+    url?: string;
+    reason: 'no-trigger' | 'no-road-context' | 'no-date' | 'past-event' | 'non-lima';
+    /** Publication timestamp as a full ISO string with offset. */
+    postDate: string;
+    /** Gate evidence: matched keywords, extracted date raw, etc. */
+    detail?: Record<string, unknown>;
+};
+
 export type ScrapeResult = {
     events: ScrapedEvent[];
+    /** Keyword-positive gate rejections from this run (ADR-011). Only the
+     *  news-shaped road sources produce these; others omit the field. */
+    quarantined?: QuarantinedPost[];
     /** End (exclusive) of the fully-covered scrape window, or null when any part of
      *  the window was dropped or skipped. Non-null gates the cancel-missing sweep:
      *  scheduled rows inside [now, sweepWindowEnd) that this scrape did not return
