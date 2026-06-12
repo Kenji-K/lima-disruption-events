@@ -21,10 +21,12 @@ const DB_PING_TIMEOUT_MS = 2_000;
 /** Demo fence (PLAN.md 2026-06-11 workshop): ticketer/futbolperuano-derived
  *  data is "internal + demo use only" (upstream ToS), so these sources never
  *  appear on the always-on public URL. EXPOSE_GATED_SOURCES=true lifts the
- *  gate for the duration of a controlled-audience demo. */
+ *  gate for the duration of a controlled-audience demo;
+ *  exposeGatedSourcesUntil lifts it only until the given instant (the prod
+ *  demo flip — self-relatching, evaluated per request). */
 export const GATED_SOURCE_IDS = ['futbolperuano', 'joinnus'];
 
-export type RouteOptions = { exposeGatedSources?: boolean };
+export type RouteOptions = { exposeGatedSources?: boolean; exposeGatedSourcesUntil?: Date };
 
 // Shared SELECT projection: PostGIS point unpacked to lng/lat at the DB
 // (ST_X/ST_Y return null for null locations, so the null-location case flows through).
@@ -79,9 +81,15 @@ function toEventResponse(row: EventRow): EventResponse {
 
 export function registerRoutes(app: FastifyInstance, options: RouteOptions = {}): void {
     const r = app.withTypeProvider<ZodTypeProvider>();
-    const visibilityGate = options.exposeGatedSources
-        ? []
-        : [notInArray(events.sourceId, GATED_SOURCE_IDS)];
+    // Evaluated per request: the timed flip must relatch mid-process, without
+    // a restart, the moment its instant passes.
+    const visibilityGate = () => {
+        const lifted =
+            options.exposeGatedSources === true ||
+            (options.exposeGatedSourcesUntil !== undefined &&
+                Date.now() < options.exposeGatedSourcesUntil.getTime());
+        return lifted ? [] : [notInArray(events.sourceId, GATED_SOURCE_IDS)];
+    };
 
     r.get(
         '/healthz',
@@ -126,7 +134,7 @@ export function registerRoutes(app: FastifyInstance, options: RouteOptions = {})
         },
         async (req) => {
             const { from, to, category, source, limit } = req.query;
-            const conditions = [...visibilityGate];
+            const conditions = [...visibilityGate()];
             // Overlap semantics: an event matches [from, to] when its own interval
             // [start_at, end_at ?? start_at] intersects the window — a multi-day
             // closure that began before `from` is still in effect. COALESCE (not
@@ -251,7 +259,7 @@ export function registerRoutes(app: FastifyInstance, options: RouteOptions = {})
             const [row] = await db
                 .select(eventSelection)
                 .from(events)
-                .where(and(eq(events.id, req.params.id), ...visibilityGate))
+                .where(and(eq(events.id, req.params.id), ...visibilityGate()))
                 .limit(1);
 
             if (!row) {

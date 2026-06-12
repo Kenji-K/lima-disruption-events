@@ -8,9 +8,28 @@ import { createIngestTask, createRoadAlertTask } from './ingest/schedule';
 import { runFirstRunCatchUp } from './ingest/run';
 import { runRoadAlertSyncOnce } from './ingest/sutran-alerts';
 
-const app = await buildServer(log, { exposeGatedSources: env.EXPOSE_GATED_SOURCES });
+const gateUntil = env.EXPOSE_GATED_SOURCES_UNTIL
+    ? new Date(env.EXPOSE_GATED_SOURCES_UNTIL)
+    : undefined;
+const app = await buildServer(log, {
+    exposeGatedSources: env.EXPOSE_GATED_SOURCES,
+    exposeGatedSourcesUntil: gateUntil,
+});
 if (env.EXPOSE_GATED_SOURCES) {
     log.warn('EXPOSE_GATED_SOURCES is ON — gated sources are publicly visible (demo mode)');
+}
+if (gateUntil) {
+    if (gateUntil.getTime() > Date.now()) {
+        log.warn(
+            { until: gateUntil.toISOString() },
+            'EXPOSE_GATED_SOURCES_UNTIL active — gated sources publicly visible until then (timed demo flip)',
+        );
+    } else {
+        log.info(
+            { until: gateUntil.toISOString() },
+            'EXPOSE_GATED_SOURCES_UNTIL is in the past — gate closed (stale secret, safe to unset)',
+        );
+    }
 }
 
 // 5xx responses reach Sentry via an onError hook; the sanitized error handler

@@ -12,11 +12,17 @@ const envSchema = z.object({
     SENTRY_ENVIRONMENT: z.string().min(1).default('development'),
     // Demo fence (PLAN 2026-06-11 workshop): 'true' lifts the public-visibility
     // gate on ticketer/futbolperuano data for a controlled-audience demo.
-    // Default off — the always-on public URL never serves gated sources.
+    // The bare boolean is for localhost demos only — on the prod app use
+    // EXPOSE_GATED_SOURCES_UNTIL instead.
     EXPOSE_GATED_SOURCES: z
         .enum(['true', 'false'])
         .default('false')
         .transform((v) => v === 'true'),
+    // Prod demo flip (owner decision 2026-06-12): lifts the gate until the
+    // given instant, then relatches BY ITSELF — no second deploy, nothing to
+    // remember after the meeting (the failure mode review A4 flagged). Set it
+    // to ~the meeting's end, e.g. 2026-06-15T16:00:00-05:00.
+    EXPOSE_GATED_SOURCES_UNTIL: z.iso.datetime({ offset: true }).optional(),
 });
 
 export const env = envSchema.parse(process.env);

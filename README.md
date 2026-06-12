@@ -65,7 +65,14 @@ The web build needs the monorepo, so it builds **locally** (`vercel build`) and 
 - API (Fly secrets): `DATABASE_URL` (6PN connection string), `SENTRY_DSN`. Set with `fly secrets set KEY=value -a disruption-intelligence-api`.
 - DB (Fly secrets): `POSTGRES_PASSWORD`. Fly secrets are write-only — if the password is lost, rotate it: set a new value on the DB app **and** update the API's `DATABASE_URL` to match, then restart both.
 - Web (Vercel env, production): `VITE_API_URL`, `VITE_SENTRY_DSN` — **must** be added `--no-sensitive` (`npx vercel env add NAME production --no-sensitive --value '…'`); sensitive values can't be pulled into the local `vercel build`, and they're baked into public JS anyway.
-- **`EXPOSE_GATED_SOURCES` is NEVER set on the prod app.** Flipping it there serves ToS-fenced data (futbolperuano, Joinnus) to the open internet for the demo's duration — exactly what the controlled-audience rule prohibits. Demos that need gated data run from localhost (`EXPOSE_GATED_SOURCES=true pnpm -F api dev`) or a separate short-lived Fly app that is torn down after the meeting.
+- **Demoing gated sources (futbolperuano, Joinnus) on the prod app uses the timed flip, never the bare boolean.** Just before the meeting, set the gate to lift until ~the meeting's end; it relatches **by itself** at that instant — no second deploy, nothing to remember afterwards:
+
+  ```bash
+  fly secrets set EXPOSE_GATED_SOURCES_UNTIL=2026-06-15T16:00:00-05:00 -a disruption-intelligence-api
+  fly secrets unset EXPOSE_GATED_SOURCES_UNTIL -a disruption-intelligence-api   # whenever convenient; a past instant is inert
+  ```
+
+  While the window is open the gated data is visible to anyone hitting the public URL, not just the demo audience — keep the window tight. `EXPOSE_GATED_SOURCES=true` (no expiry) is for localhost demos only: `EXPOSE_GATED_SOURCES=true pnpm -F api dev`.
 
 ### Operating the prod API
 

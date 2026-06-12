@@ -316,6 +316,35 @@ describe('public-visibility gate (demo fence, PLAN 2026-06-11 workshop)', () => 
         expect(byId.statusCode).toBe(200);
         await demoApp.close();
     });
+
+    it('timed flip: serves gated sources until the instant, then relatches without restart', async () => {
+        // Prod demo flip (owner decision 2026-06-12): the gate is evaluated per
+        // request, so the SAME server instance must relatch once the window ends.
+        const timedApp = await buildServer(pino({ level: 'silent' }), {
+            exposeGatedSourcesUntil: new Date(Date.now() + 250),
+        });
+        await timedApp.ready();
+
+        const during = await timedApp.inject({ method: 'GET', url: '/events' });
+        expect(during.json<ApiEvent[]>().map((e) => e.title)).toContain('Partido gated');
+
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const after = await timedApp.inject({ method: 'GET', url: '/events' });
+        const titlesAfter = after.json<ApiEvent[]>().map((e) => e.title);
+        expect(titlesAfter).not.toContain('Partido gated');
+        expect(titlesAfter).not.toContain('Concierto gated');
+        await timedApp.close();
+    });
+
+    it('timed flip in the past is inert (stale secret cannot expose anything)', async () => {
+        const staleApp = await buildServer(pino({ level: 'silent' }), {
+            exposeGatedSourcesUntil: new Date(Date.now() - 1000),
+        });
+        await staleApp.ready();
+        const list = await staleApp.inject({ method: 'GET', url: '/events' });
+        expect(list.json<ApiEvent[]>().map((e) => e.title)).not.toContain('Partido gated');
+        await staleApp.close();
+    });
 });
 
 describe('GET /sources', () => {
