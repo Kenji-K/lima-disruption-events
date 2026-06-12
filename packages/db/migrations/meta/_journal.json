@@ -43,6 +43,13 @@
       "when": 1781194258834,
       "tag": "0005_serious_black_crow",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781228241495,
+      "tag": "0006_dark_mercury",
+      "breakpoints": true
     }
   ]
 }

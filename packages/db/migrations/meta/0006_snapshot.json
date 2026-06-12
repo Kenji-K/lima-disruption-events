@@ -1,0 +1,610 @@
+{
+  "id": "b3c46a6d-aef1-4963-8f3a-8e4195beeab4",
+  "prevId": "d1a7ce50-c796-409c-921f-59871de6eafa",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.events": {
+      "name": "events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "region_id": {
+          "name": "region_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "event_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_at": {
+          "name": "start_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_at": {
+          "name": "end_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location": {
+          "name": "location",
+          "type": "geography(Point, 4326)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_payload": {
+          "name": "source_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dedup_key": {
+          "name": "dedup_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ingested_at": {
+          "name": "ingested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "events_source_external_uq": {
+          "name": "events_source_external_uq",
+          "columns": [
+            {
+              "expression": "source_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "events_region_state_start_idx": {
+          "name": "events_region_state_start_idx",
+          "columns": [
+            {
+              "expression": "region_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"events\".\"state\" = 'scheduled'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "events_region_category_idx": {
+          "name": "events_region_category_idx",
+          "columns": [
+            {
+              "expression": "region_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "category",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"events\".\"state\" = 'scheduled'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "events_dedup_key_idx": {
+          "name": "events_dedup_key_idx",
+          "columns": [
+            {
+              "expression": "dedup_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"events\".\"dedup_key\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "events_region_id_regions_id_fk": {
+          "name": "events_region_id_regions_id_fk",
+          "tableFrom": "events",
+          "tableTo": "regions",
+          "columnsFrom": [
+            "region_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.regions": {
+      "name": "regions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "country_code": {
+          "name": "country_code",
+          "type": "char(2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "level": {
+          "name": "level",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "iso_code": {
+          "name": "iso_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "centroid": {
+          "name": "centroid",
+          "type": "geography(Point, 4326)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "regions_parent_id_regions_id_fk": {
+          "name": "regions_parent_id_regions_id_fk",
+          "tableFrom": "regions",
+          "tableTo": "regions",
+          "columnsFrom": [
+            "parent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "regions_country_level_slug_uq": {
+          "name": "regions_country_level_slug_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "country_code",
+            "level",
+            "slug"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "regions_level_parent_check": {
+          "name": "regions_level_parent_check",
+          "value": "(\"regions\".\"level\" = 1 AND \"regions\".\"parent_id\" IS NULL) OR (\"regions\".\"level\" > 1 AND \"regions\".\"parent_id\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ingest_state": {
+      "name": "ingest_state",
+      "schema": "",
+      "columns": {
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "cursor": {
+          "name": "cursor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_run_at": {
+          "name": "last_run_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_success_at": {
+          "name": "last_success_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_at": {
+          "name": "last_error_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "consecutive_failures": {
+          "name": "consecutive_failures",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ingest_quarantine": {
+      "name": "ingest_quarantine",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "detail": {
+          "name": "detail",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "post_date": {
+          "name": "post_date",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_seen_at": {
+          "name": "first_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ingest_quarantine_source_external_uq": {
+          "name": "ingest_quarantine_source_external_uq",
+          "columns": [
+            {
+              "expression": "source_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.road_alerts": {
+      "name": "road_alerts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "estado": {
+          "name": "estado",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "location": {
+          "name": "location",
+          "type": "geography(Point, 4326)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "codigo_via": {
+          "name": "codigo_via",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nombre_carretera": {
+          "name": "nombre_carretera",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "afectacion": {
+          "name": "afectacion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evento": {
+          "name": "evento",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivo": {
+          "name": "motivo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fuente": {
+          "name": "fuente",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ubigeo": {
+          "name": "ubigeo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reported_at": {
+          "name": "reported_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "event_started_on": {
+          "name": "event_started_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dataset_updated_at": {
+          "name": "dataset_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "source_payload": {
+          "name": "source_payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "road_alerts_location_gix": {
+          "name": "road_alerts_location_gix",
+          "columns": [
+            {
+              "expression": "location",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gist",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "road_alerts_estado_chk": {
+          "name": "road_alerts_estado_chk",
+          "value": "\"road_alerts\".\"estado\" IN ('normal', 'restringido', 'interrumpido')"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.event_state": {
+      "name": "event_state",
+      "schema": "public",
+      "values": [
+        "scheduled",
+        "cancelled"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
