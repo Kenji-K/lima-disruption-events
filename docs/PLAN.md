@@ -139,6 +139,7 @@ If anything in step 2 looks wrong, surface it to the user before changing code. 
 
 **Queued follow-ups (next session picks up here):**
 
+0. **Owner strategy discussion pending** on the session's verdict — findings memo: [`docs/research/2026-06-12-feasibility-usefulness-verdict.md`](research/2026-06-12-feasibility-usefulness-verdict.md) (platform feasible; programmatic-only road supply validated insufficient; lever menu incl. X8 + EMAPE decisions inside). Expect direction changes from that discussion before assuming the plan below holds.
 1. **Observe the first post-ADR-011 06:00 tick** (2026-06-12): `ingest_quarantine` should gain its first prod rows — MML post 79872 (INDULTOS) must land as `past-event`, NOT in `events`; check tick duration and `/sources`.
 2. **Decide the source-survey shortlist** (owner go/no-go, then ~config-only): EMAPE registry entry + district slug pack (`munisanjuandelurigancho`, `muniate`, `munilamolina`, `munilavictoria`, `munisantiagodesurco`) on the existing gob.pe scraper; metrolima2.com + Miraflores RSS are real (small) builds, post-sprint.
 3. **Open-ended windows bite now** (X2): 3 of the 6 curated rows have no stated end and drop out of `from=`-windowed views (served by the API, invisible in the default demo window). The lifecycle/`openEnded` fix is the post-sprint X2 item — pull it forward if the demo needs those rows on the map.
