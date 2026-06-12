@@ -29,7 +29,10 @@ export async function buildServer(
         genReqId: () => randomUUID(),
         // Behind Fly's edge proxy req.ip would otherwise be the proxy address —
         // the rate limiter would throttle all clients as one bucket.
-        trustProxy: true,
+        // Exactly one trusted hop (fly-proxy). `true` would trust the whole
+        // client-supplied XFF chain, letting callers spoof the rate-limit key
+        // (review A6). Local dev has no proxy; one hop is simply inert there.
+        trustProxy: 1,
     };
     const app = Fastify(options);
 

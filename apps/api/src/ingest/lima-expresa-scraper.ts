@@ -158,7 +158,9 @@ export async function limaExpresaScraper(log: Logger, cursor: unknown): Promise<
     const events: ScrapedEvent[] = [];
     const processed: string[] = [];
     for (const path of fresh) {
-        if (processed.length > 0) await sleep(DETAIL_DELAY_MS);
+        // Unconditional: the first detail fetch was back-to-back with the
+        // listing fetch on the same host (review C3).
+        await sleep(DETAIL_DELAY_MS);
         const detail = await fetchWithRetry(`${ORIGIN}${path}`, log);
         if (!detail.ok) {
             // Skip without marking seen: the next run re-attempts this post.

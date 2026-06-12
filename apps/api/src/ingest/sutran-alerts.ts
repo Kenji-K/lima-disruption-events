@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/node';
+import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Logger } from 'pino';
 import { db, roadAlerts } from '@disruption-intelligence/db';
@@ -141,6 +142,10 @@ export async function replaceRoadAlerts(snapshot: ParsedSnapshot): Promise<numbe
     }));
 
     await db.transaction(async (tx) => {
+        // Boot can run this twice concurrently (warm-up + first-run catch-up,
+        // review A2): the xact-scoped advisory lock serializes the two
+        // DELETE+INSERT replaces so the table never holds both snapshots.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('road_alerts_replace'))`);
         await tx.delete(roadAlerts);
         if (rows.length > 0) await tx.insert(roadAlerts).values(rows);
     });

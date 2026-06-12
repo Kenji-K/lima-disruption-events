@@ -35,6 +35,11 @@ const SCRAPERS: Scraper[] = [
     { name: COSTA21_SOURCE_ID, scrape: costa21Scraper },
 ];
 
+/** The registry's source ids — the identity space scraped rows live in.
+ *  Exported for the manual-import collision guard (review A9) and the
+ *  gate⊆registry invariant test (review A5). */
+export const SCRAPER_SOURCE_IDS: readonly string[] = SCRAPERS.map((s) => s.name);
+
 /** Boot catch-up: a source registered but never run in this environment (no
  *  ingest_state row) would otherwise sit dataless until the next daily tick —
  *  up to 24h after the deploy that introduced it. Runs exactly those sources

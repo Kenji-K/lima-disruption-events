@@ -1,6 +1,8 @@
 import { scrapedEventSchema, type ScrapedEvent } from '@disruption-intelligence/shared';
 import { upsertEvents, type SuppressedDuplicate } from './upsert';
 import { recordSuccess } from './state';
+import { SCRAPER_SOURCE_IDS } from './run';
+import { SUTRAN_ALERTS_SOURCE_ID } from './sutran-alerts';
 
 /** Manual-import path (V1-BRIEF Tier 2 item 4): Ord. 1680 road-interference
  *  authorizations arrive via Ley de Transparencia in whatever shape (likely
@@ -116,6 +118,14 @@ export async function importEvents(rows: ScrapedEvent[]): Promise<{
         );
     }
     const sourceId = rows[0]!.sourceId;
+    // A file must not write into a scraper's identity space: colliding ids
+    // would overwrite scraped rows AND mark the scraper fresh in /sources
+    // (review A9). Manual batches get their own namespace.
+    if (SCRAPER_SOURCE_IDS.includes(sourceId) || sourceId === SUTRAN_ALERTS_SOURCE_ID) {
+        throw new Error(
+            `import: sourceId "${sourceId}" belongs to a registered scraper — use a manual namespace id (e.g. "manual-curated", "ord-1680")`,
+        );
+    }
     const counts = await upsertEvents(rows);
     await recordSuccess(sourceId, undefined);
     return { sourceId, ...counts };

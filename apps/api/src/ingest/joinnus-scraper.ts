@@ -171,10 +171,21 @@ export async function joinnusScraper(log: Logger, cursor: unknown): Promise<Scra
 
     const events: ScrapedEvent[] = [];
     for (const entry of fresh) {
-        // Any detail failure aborts the run: the cursor stays frozen and the
-        // next run re-covers the same ids (idempotent upserts make that free).
+        // TRANSIENT detail failure aborts the run: the cursor stays frozen and
+        // the next run re-covers the same ids (idempotent upserts make that
+        // free). A definitive 4xx is warn + skip (review C2/A7): a sold-out or
+        // pulled event whose page 404s while still sitemapped would otherwise
+        // wedge the source — and re-fetching ~80 pages per retry against the
+        // most ToS-sensitive host is the worst possible failure mode.
         await sleep(DETAIL_DELAY_MS);
         const detail = await fetchWithRetry(entry.url, log);
+        if (!detail.ok && detail.reason === 'http-4xx') {
+            log.warn(
+                { eventId: entry.id, status: detail.status },
+                'joinnus: detail page gone (4xx) — event skipped',
+            );
+            continue;
+        }
         if (!detail.ok) {
             throw new Error(`joinnus: detail fetch failed for ${entry.id} (${detail.reason})`);
         }

@@ -217,6 +217,9 @@ export function createGobPeScraper(institution: GobPeInstitution) {
         }
         const lastId = parsedCursor.success ? parsedCursor.data.lastId : 0;
 
+        // The registry runs the gob.pe institutions back-to-back against one
+        // host — space the listing fetches like everything else (review C3).
+        await sleep(DETAIL_DELAY_MS);
         const outcome = await fetchWithRetry(listingUrl, log);
         if (!outcome.ok) {
             throw new Error(`gob-pe-${institution}: listing fetch failed (${outcome.reason})`);
@@ -231,12 +234,20 @@ export function createGobPeScraper(institution: GobPeInstitution) {
         const events: ScrapedEvent[] = [];
         const quarantined: QuarantinedPost[] = [];
         for (const item of candidates) {
-            // Any detail failure aborts the source run — the cursor stays
-            // frozen and the next run re-covers the same ids (upserts are
-            // idempotent). Partial cursor advance would skip the failed item
-            // forever.
+            // TRANSIENT detail failure aborts the source run — the cursor
+            // stays frozen and the next run re-covers the same ids (upserts
+            // are idempotent). A definitive 4xx is different (review C2): a
+            // permanently-404 page still listed upstream would freeze the
+            // cursor forever — per the error taxonomy it's warn + skip.
             await sleep(DETAIL_DELAY_MS);
             const detail = await fetchWithRetry(item.url, log);
+            if (!detail.ok && detail.reason === 'http-4xx') {
+                log.warn(
+                    { institution, newsId: item.id, status: detail.status },
+                    'gob-pe: detail page gone (4xx) — item skipped',
+                );
+                continue;
+            }
             if (!detail.ok) {
                 throw new Error(
                     `gob-pe-${institution}: detail fetch failed for news ${item.id} (${detail.reason})`,

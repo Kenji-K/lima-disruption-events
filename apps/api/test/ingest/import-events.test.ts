@@ -83,4 +83,17 @@ describe('importEvents — writes through the idempotent upsert', () => {
     it('rejects an empty batch', async () => {
         await expect(importEvents([])).rejects.toThrow(/empty/);
     });
+
+    it('rejects a batch whose sourceId collides with a registered scraper (review A9)', async () => {
+        // A file writing as 'mml' would overwrite scraped rows and mark the
+        // scraper fresh in /sources.
+        const rows = parseImportFile(CSV_ROWS, 'csv', 'x.csv').map((r) => ({
+            ...r,
+            sourceId: 'mml',
+        }));
+        await expect(importEvents(rows)).rejects.toThrow(/registered scraper/);
+        await expect(
+            importEvents(rows.map((r) => ({ ...r, sourceId: 'sutran-alerts' }))),
+        ).rejects.toThrow(/registered scraper/);
+    });
 });
